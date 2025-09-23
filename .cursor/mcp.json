@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\charl\\Desktop\\MyProjects\\MemorizedMCP"
+      ]
+    },
+    "memorized-mcp": {
+      "command": "C:\\Users\\charl\\Desktop\\MyProjects\\MemorizedMCP\\target\\debug\\memory_mcp_server.exe",
+      "args": [],
+      "cwd": "C:\\Users\\charl\\Desktop\\MyProjects\\MemorizedMCP",
+      "env": {
+        "DATA_DIR": "C:\\Users\\charl\\Desktop\\MyProjects\\MemorizedMCP\\data",
+        "RUST_LOG": "off"
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+---
+description: Using Context7
+globs:
+alwaysApply: true
+---
+
+# AI Agent Rule: Using Context7
+
+**Objective:** To provide accurate, up-to-date, and version-specific code documentation and examples by using the Context7 MCP server.
+
+**Core Principle:** When a prompt involves a request for code, examples, or information about a software library, you should use the Context7 tool to fetch the latest documentation directly from the source. This prevents the use of outdated training data and avoids generating hallucinated or non-existent APIs.
+
+
+## **Available Tools & Commands**
+
+When activated, you have access to the following internal tools to fulfill the user's request. You should use these tools logically to first identify the correct library and then retrieve its documentation.
+
+**1. `resolve-library-id`**
+
+* **Purpose:** Resolves a general library name (e.g., "next.js", "mongo") into a specific, Context7-compatible library ID.
+* **When to Use:** Use this first to ensure you are requesting docs for the correct library.
+* **Parameters:**
+  * `libraryName` (required): The name of the library you are searching for.
+
+**2. `get-library-docs`**
+
+* **Purpose:** Fetches the documentation for a library once you have its specific ID.
+* **When to Use:** After you have used `resolve-library-id` or if the user provides an exact Context7-compatible ID.
+* **Parameters:**
+  * `context7CompatibleLibraryID` (required): The exact ID for the library (e.g., `/vercel/next.js`, `/mongodb/docs`).
+  * `topic` (optional): A specific topic to focus on within the documentation (e.g., "routing", "hooks").
+  * `tokens` (optional, default: 10000): The maximum number of tokens to return in the documentation.
+
+---
+
+## **Workflow**
+
+1. Think if Context7 is needed, if yes use it if no dont.
+2. Identify the library or package the user is asking about.
+3. Use the `resolve-library-id` tool to get the precise library ID.
+4. Use the `get-library-docs` tool with the ID to fetch the relevant documentation. If the user mentioned a specific topic, include it in the `topic` parameter.
+5. Synthesize the retrieved documentation and code examples into a final, accurate answer for the user.

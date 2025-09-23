@@ -1,0 +1,465 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# MCP Server AI Agent Usage Guide
+
+## Table of Contents
+
+- [MCP Server AI Agent Usage Guide](#mcp-server-ai-agent-usage-guide)
+  - [Table of Contents](#table-of-contents)
+  - [Memory MCP Server](#memory-mcp-server)
+    - [Purpose](#purpose)
+    - [Supported Operations](#supported-operations)
+  - [Sequential Thinking MCP Server](#sequential-thinking-mcp-server)
+    - [Purpose](#purpose-1)
+    - [Supported Operations](#supported-operations-1)
+      - [Additional Inputs](#additional-inputs)
+  - [FileSystem MCP Server](#filesystem-mcp-server)
+    - [Purpose](#purpose-2)
+    - [Supported Operations](#supported-operations-2)
+  - [Fetch MCP Server](#fetch-mcp-server)
+    - [Purpose](#purpose-3)
+    - [Supported Operations](#supported-operations-3)
+  - [Git MCP Server](#git-mcp-server)
+    - [Purpose](#purpose-4)
+    - [Supported Operations](#supported-operations-4)
+  - [ShadCN-UI MCP Server](#shadcn-ui-mcp-server)
+    - [Purpose](#purpose-5)
+    - [Supported Operations](#supported-operations-5)
+  - [React MCP Server](#react-mcp-server)
+    - [Purpose](#purpose-6)
+    - [Supported Operations](#supported-operations-6)
+  - [NodeJS MCP Server](#nodejs-mcp-server)
+    - [Purpose](#purpose-7)
+    - [Supported Operations](#supported-operations-7)
+
+
+## Memory MCP Server
+
+### Purpose
+
+Provides persistent, semantic or graph-based memory capabilities that allow storing, querying, and deleting information.
+
+### Supported Operations
+
+- **memory-store:** Store information in memory, possibly with metadata.
+    - Example:
+
+```json
+{ "data": "some information", "metadata": { "topic": "physics" } }
+```
+
+- **memory-query:** Retrieve relevant information based on a query.
+    - Example:
+
+```json
+{ "query": "What did I learn about gravity?" }
+```
+
+- **memory-delete:** Delete specific memory entries.
+    - Example:
+
+```json
+{ "id": "memory_id_to_delete" }
+```
+
+
+## Sequential Thinking MCP Server
+
+### Purpose
+
+Helps organize thoughts, break down problems, and build reasoning step by step.
+
+### Supported Operations
+
+- **sequential_thought:** Submit a reasoning step or thought.
+    - Example:
+
+```json
+{ "thought": "Step 1: Identify the problem" }
+```
+
+- **progress_status:** Track progress within a sequence of thoughts.
+    - Example:
+
+```json
+{}
+```
+
+- **branch_thought:** Create a branched path in reasoning from a previous step.
+    - Example:
+
+```json
+{ "branchFromThought": 2, "branchId": "alternative1" }
+```
+
+- **revise_thought:** Update or revise a previous thought.
+    - Example:
+
+```json
+{ "revisesThought": 3, "thought": "Updated consideration for step 3" }
+```
+
+
+#### Additional Inputs
+
+- `thought`: The current reasoning step.
+- `nextThoughtNeeded`: Boolean for more steps.
+- `thoughtNumber`: Current step index.
+- `totalThoughts`: Planned total steps.
+- Branching supports `branchFromThought` and `branchId`.
+
+
+## FileSystem MCP Server
+
+### Purpose
+
+Allows safe interaction with files and directories within allowed paths.
+
+### Supported Operations
+
+- **read_file:** Read the contents of a file.
+    - Example:
+
+```json
+{ "path": "/projects/myfile.txt" }
+```
+
+- **read_multiple_files:** Read several files at once.
+    - Example:
+
+```json
+{ "paths": ["/projects/a.txt", "/projects/b.txt"] }
+```
+
+- **write_file:** Overwrite or create a file with desired content.
+    - Example:
+
+```json
+{ "path": "/projects/output.txt", "content": "Hello World" }
+```
+
+- **edit_file:** Apply specified edits to a file (use dryRun for safety).
+    - Example:
+
+```json
+{ "path": "/projects/config.json", "edits": [ { "oldText": "foo", "newText": "bar" } ], "dryRun": true }
+```
+
+- **create_directory:** Make a new directory, parents included.
+    - Example:
+
+```json
+{ "path": "/projects/newdir" }
+```
+
+- **list_directory:** Show files and folders inside a directory.
+    - Example:
+
+```json
+{ "path": "/projects" }
+```
+
+- **move_file:** Move or rename files and directories.
+    - Example:
+
+```json
+{ "source": "/projects/old.txt", "destination": "/projects/new.txt" }
+```
+
+- **search_files:** Recursively find files by pattern.
+    - Example:
+
+```json
+{ "path": "/projects", "pattern": "*.md" }
+```
+
+- **get_file_info:** Get details such as size and timestamps.
+    - Example:
+
+```json
+{ "path": "/projects/readme.md" }
+```
+
+- **list_allowed_directories:** Show which directories are accessible.
+    - Example:
+
+```json
+{}
+```
+
+
+## Fetch MCP Server
+
+### Purpose
+
+Fetches web content from URLs, returning plain text or markdown.
+
+### Supported Operations
+
+- **fetch:** Retrieve web page content as markdown or raw data.
+    - Example:
+
+```json
+{
+  "url": "https://example.com",
+  "max_length": 5000,
+  "start_index": 0,
+  "raw": false
+}
+```
+
+    - `url`: Required.
+    - `max_length`: Optional limit (default 5000 characters).
+    - `start_index`: Optional, starts at a specific index.
+    - `raw`: Optional, set to true for raw HTML/text.
+
+
+## Git MCP Server
+
+### Purpose
+
+Allows automated version control on repositories including cloning, commits, status, and logs.
+
+### Supported Operations
+
+- **git_clone:** Clone a repository by URL to a destination.
+    - Example:
+
+```json
+{ "repo_url": "https://github.com/user/repo.git", "destination": "/projects/repo" }
+```
+
+- **git_commit:** Commit staged changes with a message.
+    - Example:
+
+```json
+{ "message": "Fix issue #123" }
+```
+
+- **git_push:** Push committed changes upstream.
+    - Example:
+
+```json
+{}
+```
+
+- **git_pull:** Pull the latest changes from the remote.
+    - Example:
+
+```json
+{}
+```
+
+- **git_status:** Check for changed or untracked files.
+    - Example:
+
+```json
+{}
+```
+
+- **git_log:** View recent commit history, optionally limit results.
+    - Example:
+
+```json
+{ "limit": 10 }
+```
+
+
+## ShadCN-UI MCP Server
+
+### Purpose
+
+Lets you access shadcn/ui v4 React components, code, demos, blocks, and metadata.
+
+### Supported Operations
+
+- **get_component:** Get a component’s source code.
+    - Example:
+
+```json
+{ "componentName": "button" }
+```
+
+- **get_component_demo:** See component usage examples.
+    - Example:
+
+```json
+{ "componentName": "button" }
+```
+
+- **list_components:** Show all available components.
+    - Example:
+
+```json
+{}
+```
+
+- **get_component_metadata:** Fetch dependencies or config for a component.
+    - Example:
+
+```json
+{ "componentName": "button" }
+```
+
+- **get_block:** Fetch a full UI block (like a signup or dashboard set).
+    - Example:
+
+```json
+{ "blockName": "dashboard-01" }
+```
+
+- **list_blocks:** List every block, grouped by type.
+    - Example:
+
+```json
+{}
+```
+
+- **get_directory_structure:** Show the component library directory tree.
+    - Example:
+
+```json
+{}
+```
+
+
+## React MCP Server
+
+### Purpose
+
+Automates full React project workflows: creation, file management, running, and process control.
+
+### Supported Operations
+
+- **create-react-app:** Make a new app, optionally with a template.
+    - Example:
+
+```json
+{ "name": "my-app", "template": "typescript", "directory": "/projects" }
+```
+
+- **run-react-app:** Start the development server for an app.
+    - Example:
+
+```json
+{ "projectPath": "/projects/my-app" }
+```
+
+- **run-command:** Run any shell command in a directory.
+    - Example:
+
+```json
+{ "command": "npm run build", "directory": "/projects/my-app" }
+```
+
+- **get-process-output:** Get output logs from a running process.
+    - Example:
+
+```json
+{ "processId": "123456" }
+```
+
+- **stop-process:** Stop a process by its ID.
+    - Example:
+
+```json
+{ "processId": "123456" }
+```
+
+- **list-processes:** Show all current running processes.
+    - Example:
+
+```json
+{}
+```
+
+- **edit-file:** Write or update file content.
+    - Example:
+
+```json
+{ "filePath": "/projects/my-app/src/App.js", "content": "// new code" }
+```
+
+- **read-file:** Read a specific file’s contents.
+    - Example:
+
+```json
+{ "filePath": "/projects/my-app/src/App.js" }
+```
+
+- **install-package:** Install an npm package, optional dev flag.
+    - Example:
+
+```json
+{ "packageName": "react-router-dom", "directory": "/projects/my-app", "dev": true }
+```
+
+- **check-installation-status:** Review package installation state.
+    - Example:
+
+```json
+{ "processId": "987654" }
+```
+
+
+## NodeJS MCP Server
+
+### Purpose
+
+Controls and automates execution of Node.js scripts, npm scripts, and direct eval code.
+
+### Supported Operations
+
+- **run-node-script:** Run a script file with arguments and input.
+    - Example:
+
+```json
+{
+  "scriptPath": "/scripts/my-script.js",
+  "nodeArgs": [],
+  "args": ["arg1", "arg2"],
+  "stdin": "input data",
+  "cwd": "/projects"
+}
+```
+
+- **run-npm-script:** Execute scripts from a package.json in a directory.
+    - Example:
+
+```json
+{
+  "packageDir": "/projects/my-app",
+  "scriptName": "start",
+  "args": [],
+  "stdin": ""
+}
+```
+
+- **run-node-eval:** Evaluate JavaScript code within Node.js.
+    - Example:
+
+```json
+{
+  "code": "console.log('Hello world')",
+  "evalDirectory": "/projects/my-app",
+  "stdin": ""
+}
+```
+
+- **node-version:** Get information about the Node.js runtime.
+    - Example:
+
+```json
+"node-version://info"
+```
+
+- **npm-scripts:** List possible npm scripts for a directory.
+    - Example:
+
+```json
+"npm-scripts:///projects/my-app"
+```

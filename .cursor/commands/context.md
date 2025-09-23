@@ -1,0 +1,1 @@
+Make sure to always keep all the files in the "DOCS" folder as references and refer to them when working on a related task. Thanks !

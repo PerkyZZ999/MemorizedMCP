@@ -1,0 +1,867 @@
+---
+description: Full 2025 Guide for React 19 Best practices and standards.
+globs:
+alwaysApply: true
+---
+
+# React 19 Best Practices and Standards: A Comprehensive Guide
+
+## Table of Contents
+
+- [React 19 Best Practices and Standards: A Comprehensive Guide](#react-19-best-practices-and-standards-a-comprehensive-guide)
+  - [Table of Contents](#table-of-contents)
+  - [**Core React 19 Features and Best Practices**](#core-react-19-features-and-best-practices)
+    - [**New Hooks and Their Applications**](#new-hooks-and-their-applications)
+    - [**React Server Components Best Practices**](#react-server-components-best-practices)
+  - [**Component Architecture and Design Patterns**](#component-architecture-and-design-patterns)
+    - [**Function Components as the Standard**](#function-components-as-the-standard)
+    - [**Custom Hooks for Reusable Logic**](#custom-hooks-for-reusable-logic)
+    - [**Component Composition Patterns**](#component-composition-patterns)
+  - [**TypeScript Integration Best Practices**](#typescript-integration-best-practices)
+    - [**Component Props Typing**](#component-props-typing)
+    - [**Generic Components**](#generic-components)
+  - [**State Management Best Practices**](#state-management-best-practices)
+    - [**Modern State Management Approach**](#modern-state-management-approach)
+    - [**State Management Principles**](#state-management-principles)
+  - [**Performance Optimization Strategies**](#performance-optimization-strategies)
+    - [**React Compiler (React 19)**](#react-compiler-react-19)
+    - [**Memoization Techniques**](#memoization-techniques)
+    - [**Code Splitting and Lazy Loading**](#code-splitting-and-lazy-loading)
+    - [**List Virtualization**](#list-virtualization)
+  - [**Project Structure and Organization**](#project-structure-and-organization)
+    - [**Feature-Based Folder Structure**](#feature-based-folder-structure)
+    - [**Component Organization**](#component-organization)
+    - [**Naming Conventions**](#naming-conventions)
+  - [**Testing Best Practices**](#testing-best-practices)
+    - [**Testing Philosophy**](#testing-philosophy)
+    - [**Testing Tools**](#testing-tools)
+    - [**Testing Patterns**](#testing-patterns)
+  - [**Accessibility Best Practices**](#accessibility-best-practices)
+    - [**Semantic HTML Foundation**](#semantic-html-foundation)
+    - [**ARIA Attributes**](#aria-attributes)
+    - [**Focus Management**](#focus-management)
+  - [**Security Best Practices**](#security-best-practices)
+    - [**Input Sanitization**](#input-sanitization)
+    - [**URL Validation**](#url-validation)
+  - [**Modern Development Workflow**](#modern-development-workflow)
+    - [**Development Tools**](#development-tools)
+    - [**Build Optimization**](#build-optimization)
+  - [**Future-Proofing Your React Applications**](#future-proofing-your-react-applications)
+    - [**Stay Updated with React Evolution**](#stay-updated-with-react-evolution)
+    - [**Modern Framework Integration**](#modern-framework-integration)
+  - [**Conclusion**](#conclusion)
+
+React 19 introduces revolutionary features that transform how we build modern web applications. This comprehensive guide covers the essential best practices, architectural patterns, and standards you need to create scalable, maintainable, and high-performing React applications in 2025.
+
+## **Core React 19 Features and Best Practices**
+
+### **New Hooks and Their Applications**
+
+React 19 introduces several powerful hooks that simplify common development tasks:
+
+**useActionState Hook**
+
+- Manages form actions and state transitions
+- Automatically handles pending states, errors, and success responses
+- Eliminates the need for separate loading state management
+
+```jsx
+const [state, submitAction, isPending] = useActionState(async (prevState, formData) => {
+  // Handle form submission
+  const result = await submitForm(formData);
+  return { success: true, data: result };
+}, { success: false, data: null });
+```
+
+**useOptimistic Hook**
+
+- Enables immediate optimistic UI updates
+- Automatically reverts changes if operations fail
+- Provides seamless user experience for async operations
+
+```jsx
+const [optimisticState, addOptimistic] = useOptimistic(
+  currentState,
+  (state, optimisticValue) => ({ ...state, ...optimisticValue })
+);
+```
+
+**useFormStatus Hook**
+
+- Provides real-time form submission status
+- Accessible from child components without prop drilling
+- Enhances form UX with loading states
+
+```jsx
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button disabled={pending}>
+      {pending ? 'Submitting...' : 'Submit'}
+    </button>
+  );
+}
+```
+
+**New use() API**
+
+- Allows awaiting promises directly in components
+- Replaces both useEffect for data fetching and useContext
+- Works within Suspense boundaries for graceful loading
+
+```jsx
+function UserProfile({ userPromise }) {
+  const user = use(userPromise);
+  return <div>{user.name}</div>;
+}
+```
+
+
+### **React Server Components Best Practices**
+
+React Server Components represent a paradigm shift in React applications, offering significant performance benefits:
+
+**Server Component Guidelines:**
+
+- Run exclusively on the server
+- Have direct access to data sources
+- Cannot use client-side features like state or event handlers
+- Reduce JavaScript bundle size significantly
+
+**Client Component Guidelines:**
+
+- Handle user interactions and state management
+- Must be explicitly marked with "use client" directive
+- Can import and use Server Components as children
+
+```jsx
+// Server Component
+async function ProductList() {
+  const products = await fetchProducts();
+  return (
+    <div>
+      {products.map(product => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+      <AddToCartButton /> {/* Client Component */}
+    </div>
+  );
+}
+
+// Client Component
+"use client";
+function AddToCartButton() {
+  const [isLoading, setIsLoading] = useState(false);
+  // Handle user interactions
+}
+```
+
+**Best Practices for Server Components:**
+
+- Default to Server Components when possible
+- Use async/await for cleaner server-side logic
+- Import Client Components strategically
+- Avoid passing functions as props from Server to Client Components
+
+
+## **Component Architecture and Design Patterns**
+
+### **Function Components as the Standard**
+
+Function components have become the de facto standard for React development, emphasizing simplicity and composability:
+
+```jsx
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchUser() {
+      setLoading(true);
+      try {
+        const userData = await fetchUserData(userId);
+        setUser(userData);
+      } catch (error) {
+        console.error("Failed to fetch user data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchUser();
+  }, [userId]);
+
+  if (loading) return <LoadingSpinner />;
+  if (!user) return <ErrorMessage message="User not found" />;
+
+  return (
+    <div className="user-profile">
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+    </div>
+  );
+}
+```
+
+
+### **Custom Hooks for Reusable Logic**
+
+Custom hooks extract stateful logic into reusable functions, promoting code reuse and separation of concerns:
+
+```jsx
+function useFormInput(initialValue) {
+  const [value, setValue] = useState(initialValue);
+  
+  const handleChange = (e) => setValue(e.target.value);
+  const reset = () => setValue(initialValue);
+  
+  return { value, onChange: handleChange, reset };
+}
+
+// Usage
+function LoginForm() {
+  const email = useFormInput("");
+  const password = useFormInput("");
+  
+  return (
+    <form>
+      <input type="email" {...email} />
+      <input type="password" {...password} />
+    </form>
+  );
+}
+```
+
+
+### **Component Composition Patterns**
+
+**Presentational and Container Components**
+Separate UI rendering from business logic:
+
+```jsx
+// Container Component
+function UserDashboardContainer() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchUsers().then(setUsers).finally(() => setLoading(false));
+  }, []);
+  
+  return (
+    <UserDashboard 
+      users={users} 
+      loading={loading}
+      onRefresh={() => fetchUsers().then(setUsers)}
+    />
+  );
+}
+
+// Presentational Component
+function UserDashboard({ users, loading, onRefresh }) {
+  if (loading) return <LoadingSpinner />;
+  
+  return (
+    <div>
+      <button onClick={onRefresh}>Refresh</button>
+      {users.map(user => <UserCard key={user.id} user={user} />)}
+    </div>
+  );
+}
+```
+
+**Compound Components**
+Create flexible, composable component APIs:
+
+```jsx
+function Select({ children, ...props }) {
+  return <div className="select" {...props}>{children}</div>;
+}
+
+Select.Option = function Option({ children, ...props }) {
+  return <div className="option" {...props}>{children}</div>;
+};
+
+// Usage
+<Select>
+  <Select.Option value="1">Option 1</Select.Option>
+  <Select.Option value="2">Option 2</Select.Option>
+</Select>
+```
+
+
+## **TypeScript Integration Best Practices**
+
+TypeScript has become essential for React development, providing type safety and improved developer experience:
+
+### **Component Props Typing**
+
+```jsx
+interface UserCardProps {
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: "admin" | "user" | "guest";
+    profileImage?: string;
+  };
+  onEdit?: (userId: number) => void;
+  variant?: "compact" | "detailed";
+}
+
+function UserCard({ user, onEdit, variant = "detailed" }: UserCardProps) {
+  return (
+    <div className={`user-card ${variant}`}>
+      {user.profileImage && (
+        <img src={user.profileImage} alt={`${user.name}'s profile`} />
+      )}
+      <h3>{user.name}</h3>
+      {variant === "detailed" && (
+        <>
+          <p>{user.email}</p>
+          <p>Role: {user.role}</p>
+        </>
+      )}
+      {onEdit && <button onClick={() => onEdit(user.id)}>Edit</button>}
+    </div>
+  );
+}
+```
+
+
+### **Generic Components**
+
+Create reusable, type-safe components using generics:
+
+```jsx
+interface SelectProps<T> {
+  items: T[];
+  selectedItem: T | null;
+  onSelect: (item: T) => void;
+  getDisplayText: (item: T) => string;
+  getItemKey: (item: T) => string | number;
+}
+
+function Select<T>({
+  items,
+  selectedItem,
+  onSelect,
+  getDisplayText,
+  getItemKey
+}: SelectProps<T>) {
+  return (
+    <div className="select-container">
+      <div className="selected-item">
+        {selectedItem ? getDisplayText(selectedItem) : 'Select an item'}
+      </div>
+      <ul className="items-list">
+        {items.map(item => (
+          <li
+            key={getItemKey(item)}
+            className={item === selectedItem ? 'selected' : ''}
+            onClick={() => onSelect(item)}
+          >
+            {getDisplayText(item)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+
+## **State Management Best Practices**
+
+### **Modern State Management Approach**
+
+Choose the right tool based on your application's complexity:
+
+**Local State: useState & useReducer**
+
+- Use for component-specific state
+- useState for simple values
+- useReducer for complex state logic
+
+**Global State Options:**
+
+- **Context API**: Simple global state, theme, authentication
+- **Redux Toolkit**: Large, complex applications with predictable state
+- **Zustand**: Lightweight, flexible, minimal boilerplate
+- **Jotai**: Atomic state management, fine-grained reactivity
+
+
+### **State Management Principles**
+
+**Keep State Close to Components**
+
+```jsx
+// Good - State close to where it's used
+function UserProfile() {
+  const [isEditing, setIsEditing] = useState(false);
+  // Component logic here
+}
+
+// Avoid - Unnecessary global state
+const GlobalState = {
+  userProfileEditMode: false // This should be local
+};
+```
+
+**Separate Concerns**
+
+```jsx
+// Separate business logic from UI
+function useUserData(userId) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchUser(userId).then(setUser).finally(() => setLoading(false));
+  }, [userId]);
+  
+  return { user, loading, setUser };
+}
+
+function UserComponent({ userId }) {
+  const { user, loading } = useUserData(userId);
+  
+  if (loading) return <LoadingSpinner />;
+  return <UserDisplay user={user} />;
+}
+```
+
+
+## **Performance Optimization Strategies**
+
+### **React Compiler (React 19)**
+
+React 19 introduces an experimental compiler that automatically optimizes components:
+
+```jsx
+// Before React 19 - Manual optimization
+const MemoizedComponent = React.memo(() => {
+  return <div>Optimized Component</div>;
+});
+
+// React 19 - Automatic optimization
+function Component() {
+  return <div>Automatically Optimized!</div>;
+}
+```
+
+
+### **Memoization Techniques**
+
+**React.memo for Components**
+
+```jsx
+const UserCard = React.memo(({ user }) => {
+  return <div>{user.name}</div>;
+});
+```
+
+**useMemo for Expensive Calculations**
+
+```jsx
+function ExpensiveComponent({ items }) {
+  const expensiveValue = useMemo(() => {
+    return items.reduce((acc, item) => acc + item.value, 0);
+  }, [items]);
+  
+  return <div>{expensiveValue}</div>;
+}
+```
+
+**useCallback for Function Stability**
+
+```jsx
+function ParentComponent({ items }) {
+  const handleItemClick = useCallback((id) => {
+    // Handle click logic
+  }, []);
+  
+  return items.map(item => (
+    <ChildComponent key={item.id} onClick={handleItemClick} />
+  ));
+}
+```
+
+
+### **Code Splitting and Lazy Loading**
+
+```jsx
+// Component-level code splitting
+const LazyComponent = React.lazy(() => import('./LazyComponent'));
+
+function App() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LazyComponent />
+    </Suspense>
+  );
+}
+
+// Route-level code splitting
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Profile = React.lazy(() => import('./pages/Profile'));
+```
+
+
+### **List Virtualization**
+
+For large lists, use virtualization to render only visible items:
+
+```jsx
+import { FixedSizeList as List } from 'react-window';
+
+function VirtualizedList({ items }) {
+  const Row = ({ index, style }) => (
+    <div style={style}>
+      {items[index].name}
+    </div>
+  );
+  
+  return (
+    <List
+      height={600}
+      itemCount={items.length}
+      itemSize={50}
+    >
+      {Row}
+    </List>
+  );
+}
+```
+
+
+## **Project Structure and Organization**
+
+### **Feature-Based Folder Structure**
+
+```
+src/
+├── components/          # Shared UI components
+│   ├── Button/
+│   ├── Modal/
+│   └── index.ts
+├── features/           # Feature-specific modules
+│   ├── authentication/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   └── index.ts
+│   └── dashboard/
+├── hooks/              # Shared custom hooks
+├── services/           # API and external services
+├── utils/              # Utility functions
+├── types/              # TypeScript type definitions
+└── App.tsx
+```
+
+
+### **Component Organization**
+
+```
+components/
+├── Button/
+│   ├── Button.tsx
+│   ├── Button.test.tsx
+│   ├── Button.stories.tsx
+│   ├── Button.module.css
+│   └── index.ts
+```
+
+
+### **Naming Conventions**
+
+**Component Names: PascalCase**
+
+```jsx
+// Good
+function UserProfile() {}
+function SubmitButton() {}
+
+// Avoid
+function userProfile() {}
+function submit_button() {}
+```
+
+**File Names: Match component names**
+
+```
+UserProfile.tsx
+SubmitButton.tsx
+useFormValidation.ts
+```
+
+
+## **Testing Best Practices**
+
+### **Testing Philosophy**
+
+Focus on testing behavior rather than implementation:
+
+```jsx
+// Good - Testing user interactions
+test('displays error message when login fails', async () => {
+  render(<LoginForm />);
+  
+  fireEvent.change(screen.getByLabelText(/email/i), {
+    target: { value: 'invalid@email.com' }
+  });
+  
+  fireEvent.click(screen.getByRole('button', { name: /login/i }));
+  
+  expect(await screen.findByText(/login failed/i)).toBeInTheDocument();
+});
+
+// Avoid - Testing implementation details
+test('calls setState when button is clicked', () => {
+  const mockSetState = jest.fn();
+  // This tests implementation, not behavior
+});
+```
+
+
+### **Testing Tools**
+
+**Jest + React Testing Library**
+
+```jsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import UserCard from './UserCard';
+
+test('calls onEdit when edit button is clicked', () => {
+  const mockOnEdit = jest.fn();
+  const user = { id: 1, name: 'John Doe', email: 'john@example.com' };
+  
+  render(<UserCard user={user} onEdit={mockOnEdit} />);
+  
+  fireEvent.click(screen.getByText(/edit/i));
+  
+  expect(mockOnEdit).toHaveBeenCalledWith(1);
+});
+```
+
+
+### **Testing Patterns**
+
+**Custom Render Function**
+
+```jsx
+function renderWithProviders(ui, options = {}) {
+  const { preloadedState = {}, ...renderOptions } = options;
+  
+  function Wrapper({ children }) {
+    return (
+      <Provider store={createStore(preloadedState)}>
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
+      </Provider>
+    );
+  }
+  
+  return render(ui, { wrapper: Wrapper, ...renderOptions });
+}
+```
+
+
+## **Accessibility Best Practices**
+
+### **Semantic HTML Foundation**
+
+Use semantic HTML elements to provide meaning to assistive technologies:
+
+```jsx
+function NavigationMenu() {
+  return (
+    <nav aria-label="Main navigation">
+      <ul>
+        <li><a href="/home">Home</a></li>
+        <li><a href="/about">About</a></li>
+        <li><a href="/contact">Contact</a></li>
+      </ul>
+    </nav>
+  );
+}
+```
+
+
+### **ARIA Attributes**
+
+Enhance components with ARIA attributes when semantic HTML isn't sufficient:
+
+```jsx
+function ExpandableSection({ title, children, isExpanded, onToggle }) {
+  const sectionId = useId();
+  
+  return (
+    <div>
+      <button
+        aria-expanded={isExpanded}
+        aria-controls={sectionId}
+        onClick={onToggle}
+      >
+        {title}
+      </button>
+      <div
+        id={sectionId}
+        role="region"
+        aria-labelledby={`${sectionId}-heading`}
+        hidden={!isExpanded}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+```
+
+
+### **Focus Management**
+
+Manage focus for dynamic content and modals:
+
+```jsx
+function Modal({ isOpen, onClose, children }) {
+  const modalRef = useRef(null);
+  
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, [isOpen]);
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+```
+
+
+## **Security Best Practices**
+
+### **Input Sanitization**
+
+Always sanitize dynamic content:
+
+```jsx
+import DOMPurify from 'dompurify';
+
+function SafeContent({ htmlContent }) {
+  const sanitizedHTML = DOMPurify.sanitize(htmlContent);
+  
+  return (
+    <div 
+      dangerouslySetInnerHTML={{ __html: sanitizedHTML }}
+    />
+  );
+}
+```
+
+
+### **URL Validation**
+
+Validate URLs to prevent script injection:
+
+```jsx
+function validateURL(url) {
+  try {
+    const parsed = new URL(url);
+    return ['https:', 'http:'].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function SafeLink({ href, children }) {
+  const isValidURL = validateURL(href);
+  
+  return (
+    <a href={isValidURL ? href : '#'} onClick={!isValidURL ? e => e.preventDefault() : undefined}>
+      {children}
+    </a>
+  );
+}
+```
+
+
+## **Modern Development Workflow**
+
+### **Development Tools**
+
+**Essential Tools for 2025:**
+
+- **Vite**: Fast build tool and development server
+- **React DevTools**: Component debugging and profiling
+- **ESLint**: Code quality and consistency
+- **Prettier**: Code formatting
+- **Storybook**: Component documentation and testing
+
+
+### **Build Optimization**
+
+**Production Build Configuration**
+
+```json
+{
+  "scripts": {
+    "build": "vite build",
+    "build:analyze": "vite build && npx vite-bundle-analyzer"
+  }
+}
+```
+
+**Environment Variables**
+
+```javascript
+// Use environment variables for configuration
+const API_URL = import.meta.env.VITE_API_URL;
+const IS_DEVELOPMENT = import.meta.env.DEV;
+```
+
+
+## **Future-Proofing Your React Applications**
+
+### **Stay Updated with React Evolution**
+
+- **React Server Components**: Prepare for server-first architecture
+- **Concurrent Features**: Leverage useTransition and useDeferredValue
+- **React Compiler**: Plan for automatic optimization adoption
+
+
+### **Modern Framework Integration**
+
+**Next.js with App Router**
+
+- Server Components by default
+- Streaming and progressive rendering
+- Built-in performance optimizations
+
+**Remix**
+
+- Web fundamentals approach
+- Progressive enhancement
+- Excellent developer experience
+
+
+## **Conclusion**
+
+React 19 represents a significant evolution in React development, introducing powerful features that simplify complex tasks while maintaining high performance standards. By following these best practices—from leveraging new hooks and Server Components to implementing proper TypeScript integration and accessibility standards—you'll build applications that are not only performant and maintainable but also inclusive and future-ready.
+
+The key to success with React 19 lies in understanding when and how to apply these patterns appropriately. Start with the fundamentals: write clean, semantic code, separate concerns effectively, and always prioritize user experience. As you grow more comfortable with these concepts, gradually incorporate advanced features like Server Components and the React Compiler to push your applications to the next level.
+
+Remember that the React ecosystem continues to evolve rapidly. Stay engaged with the community, keep your dependencies updated, and always be ready to adapt your practices as new patterns and tools emerge. The investment in learning these modern React practices will pay dividends in the maintainability, performance, and scalability of your applications.
