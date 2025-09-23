@@ -1,4 +1,5 @@
-# Build artifacts
+# Rust build artifacts
+/target/
 **/target/
 
 # Local data / indices / backups
@@ -10,12 +11,28 @@
 /backup/
 /export/
 
-# Cargo/Editor junk
-**/*.rs.bk
+# Logs
 *.log
+/logs/
+
+# Editor/IDE
+.vscode/
+.idea/
+.fleet/
+.history/
+.cursor/
+
+# OS files
 .DS_Store
 Thumbs.db
 
 # Env files
 **/.env
 **/.env.*
+
+# Rust backups
+**/*.rs.bk
+
+# Windows binaries (avoid committing compiled artifacts)
+*.exe
+*.pdb
