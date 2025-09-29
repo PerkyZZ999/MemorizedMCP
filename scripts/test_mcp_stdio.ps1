@@ -1,10 +1,10 @@
-$exe = 'C:\Users\charl\Desktop\MyProjects\MemorizedMCP\target\debug\memory_mcp_server.exe'
+$exe = 'C:\Users\USERNAME\Desktop\MemorizedMCP\target\debug\memory_mcp_server.exe'
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $exe
 $psi.RedirectStandardInput = $true
 $psi.RedirectStandardOutput = $true
 $psi.UseShellExecute = $false
-$psi.WorkingDirectory = 'C:\Users\charl\Desktop\MyProjects\MemorizedMCP'
+$psi.WorkingDirectory = 'C:\Users\USERNAME\Desktop\MemorizedMCP'
 $psi.EnvironmentVariables['HTTP_BIND'] = '127.0.0.1:18080'
 $psi.EnvironmentVariables['DATA_DIR'] = '.\data_mcp_test'
 $proc = New-Object System.Diagnostics.Process
