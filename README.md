@@ -2,6 +2,22 @@
 
 Use these minimal tool calls from Cursor (or any other IDE that supports MCP servers) to interact with MemorizedMCP.
 
+## Installation
+git clone the repo on your computer.
+then add :
+```JSON
+"memorized-mcp": {
+      "command": "your\\path\\to\\the\\git\\repo\\cloned\\target\\debug\\memory_mcp_server.exe",
+      "args": [],
+      "cwd": "your\\path\\to\\the\\git\\repo\\cloned\\MemorizedMCP",
+      "env": {
+        "DATA_DIR": "${workspaceFolder}\\.cursor\\memory",
+        "RUST_LOG": "off"
+      }
+    }
+```
+NOTE: You can use ${workspaceFolder} or direct path to your project for the DATA_DIR.
+
 ## Status
 - Tool: `system.status`
 - Arguments: `{}`
