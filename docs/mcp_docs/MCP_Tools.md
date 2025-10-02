@@ -110,6 +110,156 @@
 
 ---
 
+## Knowledge Graph
+
+### kg.list_entities
+- Description: List top entities by mention count.
+- Arguments (GET):
+```json
+{
+  "limit": 50
+}
+```
+- Returns: `{ "entities": [["EntityName", count], ...] }`
+- Notes:
+  - Returns entities as tuples: `[name, mention_count]` sorted by count descending.
+
+### kg.get_entity
+- Description: Get detailed information about a specific entity.
+- Arguments (GET):
+```json
+{
+  "entity": "string"
+}
+```
+- Returns: `{ "entity": string, "node": object, "docs": string[], "relations": array, "docCount": number }`
+- Notes:
+  - `node`: The entity node metadata including tags.
+  - `docs`: Document IDs that mention this entity.
+  - `relations`: Edges from this entity to other nodes.
+
+### kg.create_entity
+- Description: Create or ensure an entity node exists in the knowledge graph.
+- Arguments (POST):
+```json
+{
+  "entity": "string"
+}
+```
+- Returns: `{ "entity": string, "created": true }`
+- Notes:
+  - Idempotent operation; creates if doesn't exist.
+
+### kg.create_relation
+- Description: Create a relation/edge between two nodes.
+- Arguments (POST):
+```json
+{
+  "src": "string",
+  "dst": "string",
+  "relation": "RELATED|MENTIONS|EVIDENCE|custom"
+}
+```
+- Returns: `{ "src": string, "dst": string, "relation": string, "created": true }`
+- Notes:
+  - `src` and `dst` must be full node keys (e.g., `"Entity::Python"`, `"Document::abc123"`).
+  - Default relation is `"RELATED"` if not specified.
+
+### kg.search_nodes
+- Description: Search nodes by type and/or label pattern.
+- Arguments (GET):
+```json
+{
+  "type": "Entity|Document|Memory|Episode(optional)",
+  "pattern": "string(optional)",
+  "limit": 50
+}
+```
+- Returns: `{ "nodes": [{ "type": string, "label": string, "nodeKey": string, ... }], "count": number }`
+- Notes:
+  - Case-insensitive pattern matching on node keys, labels, and IDs.
+  - Omit `type` to search all node types.
+
+### kg.read_graph
+- Description: Get a graph snapshot with configurable entity limit.
+- Arguments (GET):
+```json
+{
+  "limit": 100
+}
+```
+- Returns: `{ "nodes": string[], "edges": [[src, dst, relation], ...] }`
+- Notes:
+  - Returns a petgraph-compatible structure.
+  - Includes entities and documents with MENTIONS edges.
+
+### kg.tag_entity
+- Description: Add tags to an entity node.
+- Arguments (POST):
+```json
+{
+  "entity": "string",
+  "tags": ["tag1", "tag2", ...]
+}
+```
+- Returns: `{ "entity": string, "tags": string[], "tagged": true }`
+- Notes:
+  - Tags are stored as an array in the entity node's metadata.
+  - Creates entity if it doesn't exist.
+  - Merges with existing tags (deduplicates).
+
+### kg.get_tags
+- Description: Get all tags or entities by a specific tag.
+- Arguments (GET):
+```json
+{ "tag": "string(optional)" }
+```
+- Returns:
+  - If `tag` provided: `{ "tag": string, "entities": string[] }`
+  - If no `tag`: `{ "tags": string[] }`
+- Notes:
+  - Returns all unique tags across entities when `tag` param is omitted.
+
+### kg.remove_tag
+- Description: Remove tags from an entity.
+- Arguments (POST):
+```json
+{
+  "entity": "string",
+  "tags": ["tag1", "tag2", ...]
+}
+```
+- Returns: `{ "entity": string, "removed": string[], "success": true }`
+
+### kg.delete_entity
+- Description: Delete an entity node and all its edges.
+- Arguments (POST):
+```json
+{
+  "entity": "string"
+}
+```
+- Returns: `{ "entity": string, "deleted": true, "removedItems": number }`
+- Notes:
+  - Cascades deletion to all edges involving this entity.
+  - Removes from entity count and link trees.
+
+### kg.delete_relation
+- Description: Delete a specific relation/edge.
+- Arguments (POST):
+```json
+{
+  "src": "string",
+  "dst": "string",
+  "relation": "string(optional, defaults to RELATED)"
+}
+```
+- Returns: `{ "src": string, "dst": string, "relation": string, "deleted": boolean }`
+- Notes:
+  - Must match exact node keys and relation type.
+
+---
+
 ## System
 
 ### system.status
@@ -206,4 +356,40 @@
 
 // system.restore
 {"source":"./backups/<snapshot>","includeIndices":true}
+```
+
+### Knowledge Graph
+```json
+// kg.create_entity
+{"entity":"Python"}
+
+// kg.tag_entity
+{"entity":"Python","tags":["language","backend"]}
+
+// kg.create_relation
+{"src":"Entity::Python","dst":"Document::abc123","relation":"MENTIONS"}
+
+// kg.search_nodes
+{"type":"Entity","pattern":"python","limit":10}
+
+// kg.get_entity
+{"entity":"Python"}
+
+// kg.list_entities
+{"limit":20}
+
+// kg.read_graph
+{"limit":50}
+
+// kg.get_tags
+{"tag":"language"}
+
+// kg.remove_tag
+{"entity":"Python","tags":["backend"]}
+
+// kg.delete_entity
+{"entity":"Python"}
+
+// kg.delete_relation
+{"src":"Entity::Python","dst":"Document::abc123","relation":"MENTIONS"}
 ```

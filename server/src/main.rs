@@ -94,7 +94,16 @@ struct RefInput {
 }
 
 #[derive(Deserialize)]
-struct AddMemoryRequest { content: String, metadata: Option<JsonValue>, layer_hint: Option<String>, session_id: Option<String>, episode_id: Option<String>, #[serde(default)] references: Option<Vec<RefInput>> }
+struct AddMemoryRequest {
+    #[serde(deserialize_with = "deserialize_content_to_string")]
+    content: String,
+    metadata: Option<JsonValue>,
+    layer_hint: Option<String>,
+    session_id: Option<String>,
+    episode_id: Option<String>,
+    #[serde(default)]
+    references: Option<Vec<RefInput>>,
+}
 
 #[derive(Serialize)]
 struct AddMemoryResponse { id: String, layer: String }
@@ -128,6 +137,18 @@ struct UpdateMemoryRequest { id: String, content: Option<String>, metadata: Opti
 
 #[derive(Deserialize)]
 struct DeleteMemoryRequest { id: String, #[serde(default)] backup: Option<bool> }
+
+fn deserialize_content_to_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = JsonValue::deserialize(deserializer)?;
+    match value {
+        JsonValue::String(s) => Ok(s),
+        JsonValue::Null => Ok(String::new()),
+        other => serde_json::to_string(&other).map_err(serde::de::Error::custom),
+    }
+}
 
 #[derive(Serialize, Default)]
 struct IndicesStatus { 
@@ -301,6 +322,17 @@ fn build_router(state: Arc<AppState>) -> Router {
 		.route("/kg/entities", get(kg_entities))
 		.route("/kg/docs_for_entity", get(kg_docs_for_entity))
 		.route("/kg/snapshot", get(kg_snapshot))
+		.route("/kg/list_entities", get(kg_list_entities))
+		.route("/kg/get_entity", get(kg_get_entity))
+		.route("/kg/create_entity", post(kg_create_entity))
+		.route("/kg/create_relation", post(kg_create_relation))
+		.route("/kg/search_nodes", get(kg_search_nodes))
+		.route("/kg/read_graph", get(kg_read_graph))
+		.route("/kg/tag_entity", post(kg_tag_entity))
+		.route("/kg/get_tags", get(kg_get_tags))
+		.route("/kg/remove_tag", post(kg_remove_tag))
+		.route("/kg/delete_entity", post(kg_delete_entity))
+		.route("/kg/delete_relation", post(kg_delete_relation))
 		.route("/memory/add", post(memory_add))
 		.route("/memory/search", get(memory_search))
 		.route("/memory/update", post(memory_update))
@@ -327,26 +359,67 @@ fn build_router(state: Arc<AppState>) -> Router {
 async fn proxy_tool_via_http(tool_name: &str, args: &serde_json::Value) -> Result<serde_json::Value, String> {
     let bind = std::env::var("HTTP_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
     let base = format!("http://{}", bind);
-    // Map tool names to method and path
+    // Map tool names to method and path (support both dot and underscore notation)
     let (method, path) = match tool_name {
-        // Memory
+        // Memory (dot notation)
         "memory.add" => ("POST", "/memory/add"),
         "memory.search" => ("GET", "/memory/search"),
         "memory.update" => ("POST", "/memory/update"),
         "memory.delete" => ("POST", "/memory/delete"),
-        // Document
+        // Memory (underscore notation)
+        "memory_add" => ("POST", "/memory/add"),
+        "memory_search" => ("GET", "/memory/search"),
+        "memory_update" => ("POST", "/memory/update"),
+        "memory_delete" => ("POST", "/memory/delete"),
+        // Document (dot notation)
         "document.store" => ("POST", "/document/store"),
         "document.retrieve" => ("GET", "/document/retrieve"),
         "document.analyze" => ("GET", "/document/analyze"),
         "document.refs_for_memory" => ("GET", "/document/refs_for_memory"),
         "document.refs_for_document" => ("GET", "/document/refs_for_document"),
         "document.validate_refs" => ("POST", "/document/validate_refs"),
-        // System
+        // Document (underscore notation)
+        "document_store" => ("POST", "/document/store"),
+        "document_retrieve" => ("GET", "/document/retrieve"),
+        "document_analyze" => ("GET", "/document/analyze"),
+        "document_refs_for_memory" => ("GET", "/document/refs_for_memory"),
+        "document_refs_for_document" => ("GET", "/document/refs_for_document"),
+        "document_validate_refs" => ("POST", "/document/validate_refs"),
+        // Knowledge Graph (dot notation)
+        "kg.list_entities" => ("GET", "/kg/list_entities"),
+        "kg.get_entity" => ("GET", "/kg/get_entity"),
+        "kg.create_entity" => ("POST", "/kg/create_entity"),
+        "kg.create_relation" => ("POST", "/kg/create_relation"),
+        "kg.search_nodes" => ("GET", "/kg/search_nodes"),
+        "kg.read_graph" => ("GET", "/kg/read_graph"),
+        "kg.tag_entity" => ("POST", "/kg/tag_entity"),
+        "kg.get_tags" => ("GET", "/kg/get_tags"),
+        "kg.remove_tag" => ("POST", "/kg/remove_tag"),
+        "kg.delete_entity" => ("POST", "/kg/delete_entity"),
+        "kg.delete_relation" => ("POST", "/kg/delete_relation"),
+        // Knowledge Graph (underscore notation)
+        "kg_list_entities" => ("GET", "/kg/list_entities"),
+        "kg_get_entity" => ("GET", "/kg/get_entity"),
+        "kg_create_entity" => ("POST", "/kg/create_entity"),
+        "kg_create_relation" => ("POST", "/kg/create_relation"),
+        "kg_search_nodes" => ("GET", "/kg/search_nodes"),
+        "kg_read_graph" => ("GET", "/kg/read_graph"),
+        "kg_tag_entity" => ("POST", "/kg/tag_entity"),
+        "kg_get_tags" => ("GET", "/kg/get_tags"),
+        "kg_remove_tag" => ("POST", "/kg/remove_tag"),
+        "kg_delete_entity" => ("POST", "/kg/delete_entity"),
+        "kg_delete_relation" => ("POST", "/kg/delete_relation"),
+        // System (dot notation)
         "system.status" => ("GET", "/status"),
         "system.cleanup" => ("POST", "/system/cleanup"),
         "system.backup" => ("POST", "/system/backup"),
         "system.restore" => ("POST", "/system/restore"),
-        // Advanced
+        // System (underscore notation)
+        "system_status" => ("GET", "/status"),
+        "system_cleanup" => ("POST", "/system/cleanup"),
+        "system_backup" => ("POST", "/system/backup"),
+        "system_restore" => ("POST", "/system/restore"),
+        // Advanced (dot notation)
         "advanced.consolidate" => ("POST", "/advanced/consolidate"),
         "advanced.analyze_patterns" => ("POST", "/advanced/analyze_patterns"),
         "advanced.reindex" => ("POST", "/advanced/reindex"),
@@ -354,6 +427,14 @@ async fn proxy_tool_via_http(tool_name: &str, args: &serde_json::Value) -> Resul
         "advanced.clusters" => ("POST", "/advanced/clusters"),
         "advanced.relationships" => ("POST", "/advanced/relationships"),
         "advanced.effectiveness" => ("POST", "/advanced/effectiveness"),
+        // Advanced (underscore notation)
+        "advanced_consolidate" => ("POST", "/advanced/consolidate"),
+        "advanced_analyze_patterns" => ("POST", "/advanced/analyze_patterns"),
+        "advanced_reindex" => ("POST", "/advanced/reindex"),
+        "advanced_trends" => ("POST", "/advanced/trends"),
+        "advanced_clusters" => ("POST", "/advanced/clusters"),
+        "advanced_relationships" => ("POST", "/advanced/relationships"),
+        "advanced_effectiveness" => ("POST", "/advanced/effectiveness"),
         _ => return Err(format!("Unknown tool: {}", tool_name)),
     };
     let url = format!("{}{}", base, path);
@@ -492,6 +573,17 @@ fn list_tools() -> Vec<ToolDescriptor> {
 		ToolDescriptor { name: "document.refs_for_memory", description: "List document references for a memory" },
 		ToolDescriptor { name: "document.refs_for_document", description: "List memories referencing a document" },
 		ToolDescriptor { name: "document.validate_refs", description: "Validate and fix documentary references" },
+		ToolDescriptor { name: "kg.list_entities", description: "List top entities by mention count" },
+		ToolDescriptor { name: "kg.get_entity", description: "Get detailed information about an entity" },
+		ToolDescriptor { name: "kg.create_entity", description: "Create or ensure an entity node exists" },
+		ToolDescriptor { name: "kg.create_relation", description: "Create a relation between two nodes" },
+		ToolDescriptor { name: "kg.search_nodes", description: "Search nodes by type and pattern" },
+		ToolDescriptor { name: "kg.read_graph", description: "Get graph snapshot with configurable limit" },
+		ToolDescriptor { name: "kg.tag_entity", description: "Add tags to an entity" },
+		ToolDescriptor { name: "kg.get_tags", description: "Get all tags or entities by tag" },
+		ToolDescriptor { name: "kg.remove_tag", description: "Remove tags from an entity" },
+		ToolDescriptor { name: "kg.delete_entity", description: "Delete an entity and its edges" },
+		ToolDescriptor { name: "kg.delete_relation", description: "Delete a specific relation" },
 		ToolDescriptor { name: "system.status", description: "Get system status" },
 		ToolDescriptor { name: "system.cleanup", description: "Run cleanup tasks" },
 		ToolDescriptor { name: "system.backup", description: "Create a backup" },
@@ -769,6 +861,210 @@ async fn kg_snapshot(axum::extract::State(state): axum::extract::State<Arc<AppSt
 	Json(serde_json::json!({ "nodes": nodes_out, "edges": edges_out }))
 }
 
+async fn kg_list_entities(axum::extract::State(state): axum::extract::State<Arc<AppState>>, axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> Json<serde_json::Value> {
+	let limit = params.get("limit").and_then(|s| s.parse::<usize>().ok()).unwrap_or(50);
+	let list = kg::list_entities(&state.db, limit).unwrap_or_default();
+	Json(serde_json::json!({ "entities": list }))
+}
+
+async fn kg_get_entity(axum::extract::State(state): axum::extract::State<Arc<AppState>>, axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> Response {
+	let entity = match params.get("entity").cloned() {
+		Some(e) => e,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "entity parameter required", None)
+	};
+	match kg::get_entity_details(&state.db, &entity) {
+		Ok(details) => Json(details).into_response(),
+		Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", err.to_string(), None)
+	}
+}
+
+async fn kg_create_entity(axum::extract::State(state): axum::extract::State<Arc<AppState>>, Json(body): Json<serde_json::Value>) -> Response {
+	let entity = match body.get("entity").and_then(|e| e.as_str()) {
+		Some(e) => e,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "entity field required", None)
+	};
+	let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+	match kg::ensure_entity_node(&state.db, entity, now_ms) {
+		Ok(_) => {
+			state.db.flush().ok();
+			Json(serde_json::json!({ "entity": entity, "created": true })).into_response()
+		}
+		Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", err.to_string(), None)
+	}
+}
+
+async fn kg_create_relation(axum::extract::State(state): axum::extract::State<Arc<AppState>>, Json(body): Json<serde_json::Value>) -> Response {
+	let src = match body.get("src").and_then(|s| s.as_str()) {
+		Some(s) => s,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "src field required", None)
+	};
+	let dst = match body.get("dst").and_then(|d| d.as_str()) {
+		Some(d) => d,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "dst field required", None)
+	};
+	let relation = body.get("relation").and_then(|r| r.as_str()).unwrap_or("RELATED");
+	let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+	
+	match kg::add_edge_generic(&state.db, src, dst, relation, now_ms) {
+		Ok(_) => {
+			state.db.flush().ok();
+			Json(serde_json::json!({ "src": src, "dst": dst, "relation": relation, "created": true })).into_response()
+		}
+		Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", err.to_string(), None)
+	}
+}
+
+async fn kg_search_nodes(axum::extract::State(state): axum::extract::State<Arc<AppState>>, axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> Json<serde_json::Value> {
+	let node_type = params.get("type").map(|s| s.as_str());
+	let pattern = params.get("pattern").map(|s| s.as_str());
+	let limit = params.get("limit").and_then(|s| s.parse::<usize>().ok()).unwrap_or(50);
+	let results = kg::search_nodes(&state.db, node_type, pattern, limit).unwrap_or_default();
+	Json(serde_json::json!({ "nodes": results, "count": results.len() }))
+}
+
+async fn kg_read_graph(axum::extract::State(state): axum::extract::State<Arc<AppState>>, axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> Json<serde_json::Value> {
+	let limit = params.get("limit").and_then(|s| s.parse::<usize>().ok()).unwrap_or(100);
+	// Similar to kg_snapshot but with configurable limit
+	use petgraph::graph::Graph;
+	let ents = kg::list_entities(&state.db, limit).unwrap_or_default();
+	let mut g: Graph<String, String> = Graph::new();
+	let mut nodes = std::collections::HashMap::new();
+	for (e, _) in &ents { let n = g.add_node(e.clone()); nodes.insert(e.clone(), n); }
+	for (e, _) in &ents {
+		let docs = kg::docs_for_entity(&state.db, e).unwrap_or_default();
+		for d in docs {
+			let doc_node = nodes.entry(d.clone()).or_insert_with(|| g.add_node(d.clone())).to_owned();
+			let e_node = nodes.get(e).cloned().unwrap();
+			let _ = g.add_edge(e_node, doc_node, "MENTIONS".to_string());
+		}
+	}
+	let nodes_out: Vec<String> = g.node_indices().map(|i| g[i].clone()).collect();
+	let edges_out: Vec<(String,String,String)> = g.edge_indices().map(|eidx| {
+		let (s,t) = g.edge_endpoints(eidx).unwrap();
+		(g[s].clone(), g[t].clone(), g[eidx].clone())
+	}).collect();
+	Json(serde_json::json!({ "nodes": nodes_out, "edges": edges_out }))
+}
+
+async fn kg_tag_entity(axum::extract::State(state): axum::extract::State<Arc<AppState>>, Json(body): Json<serde_json::Value>) -> Response {
+	let entity = match body.get("entity").and_then(|e| e.as_str()) {
+		Some(e) => e,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "entity field required", None)
+	};
+	
+	// Accept tags as either array or comma-separated string for flexibility
+	let tags: Vec<String> = match body.get("tags") {
+		Some(val) => {
+			if let Some(arr) = val.as_array() {
+				// Normal case: array of strings
+				arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+			} else if let Some(s) = val.as_str() {
+				// Fallback: comma-separated string
+				s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()
+			} else {
+				return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", 
+					format!("tags must be array or string, got: {:?}", val), None)
+			}
+		}
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "tags field required", None)
+	};
+	
+	if tags.is_empty() {
+		return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "tags cannot be empty", None);
+	}
+	
+	match kg::tag_entity(&state.db, entity, &tags) {
+		Ok(_) => {
+			state.db.flush().ok();
+			Json(serde_json::json!({ "entity": entity, "tags": tags, "tagged": true })).into_response()
+		}
+		Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", err.to_string(), None)
+	}
+}
+
+async fn kg_get_tags(axum::extract::State(state): axum::extract::State<Arc<AppState>>, axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> Json<serde_json::Value> {
+	if let Some(tag) = params.get("tag") {
+		// Get entities by specific tag
+		let entities = kg::get_entities_by_tag(&state.db, tag).unwrap_or_default();
+		Json(serde_json::json!({ "tag": tag, "entities": entities }))
+	} else {
+		// Get all tags
+		let tags = kg::get_all_tags(&state.db).unwrap_or_default();
+		Json(serde_json::json!({ "tags": tags }))
+	}
+}
+
+async fn kg_remove_tag(axum::extract::State(state): axum::extract::State<Arc<AppState>>, Json(body): Json<serde_json::Value>) -> Response {
+	let entity = match body.get("entity").and_then(|e| e.as_str()) {
+		Some(e) => e,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "entity field required", None)
+	};
+	
+	// Accept tags as either array or comma-separated string for flexibility
+	let tags: Vec<String> = match body.get("tags") {
+		Some(val) => {
+			if let Some(arr) = val.as_array() {
+				// Normal case: array of strings
+				arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()
+			} else if let Some(s) = val.as_str() {
+				// Fallback: comma-separated string
+				s.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()
+			} else {
+				return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", 
+					format!("tags must be array or string, got: {:?}", val), None)
+			}
+		}
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "tags field required", None)
+	};
+	
+	if tags.is_empty() {
+		return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "tags cannot be empty", None);
+	}
+	
+	match kg::remove_tags_from_entity(&state.db, entity, &tags) {
+		Ok(_) => {
+			state.db.flush().ok();
+			Json(serde_json::json!({ "entity": entity, "removed": tags, "success": true })).into_response()
+		}
+		Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", err.to_string(), None)
+	}
+}
+
+async fn kg_delete_entity(axum::extract::State(state): axum::extract::State<Arc<AppState>>, Json(body): Json<serde_json::Value>) -> Response {
+	let entity = match body.get("entity").and_then(|e| e.as_str()) {
+		Some(e) => e,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "entity field required", None)
+	};
+	
+	match kg::delete_entity(&state.db, entity) {
+		Ok(removed) => {
+			state.db.flush().ok();
+			Json(serde_json::json!({ "entity": entity, "deleted": true, "removedItems": removed })).into_response()
+		}
+		Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", err.to_string(), None)
+	}
+}
+
+async fn kg_delete_relation(axum::extract::State(state): axum::extract::State<Arc<AppState>>, Json(body): Json<serde_json::Value>) -> Response {
+	let src = match body.get("src").and_then(|s| s.as_str()) {
+		Some(s) => s,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "src field required", None)
+	};
+	let dst = match body.get("dst").and_then(|d| d.as_str()) {
+		Some(d) => d,
+		None => return json_error(StatusCode::BAD_REQUEST, "INVALID_INPUT", "dst field required", None)
+	};
+	let relation = body.get("relation").and_then(|r| r.as_str()).unwrap_or("RELATED");
+	
+	match kg::delete_relation(&state.db, src, dst, relation) {
+		Ok(deleted) => {
+			state.db.flush().ok();
+			Json(serde_json::json!({ "src": src, "dst": dst, "relation": relation, "deleted": deleted })).into_response()
+		}
+		Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", err.to_string(), None)
+	}
+}
+
 fn index_chunks_tantivy(index_dir: &std::path::Path, doc_id: &str, chunks: &[ChunkHeader], full_text: &str) -> Result<()> {
 	use tantivy::{schema::*, Index, doc, directory::MmapDirectory};
 	let mut schema_builder = Schema::builder();
@@ -869,9 +1165,14 @@ async fn run_stdio(_state: Arc<AppState>) {
                 out["id"] = id_val.clone();
                 match proxy_tool_via_http(name, &arguments).await {
                     Ok(json_val) => {
-                        out["result"] = serde_json::json!({ "content": [ { "type": "json", "json": json_val } ] });
+                        let text_payload = if let Some(s) = json_val.as_str() {
+                            s.to_string()
+                        } else {
+                            serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| json_val.to_string())
+                        };
+                        out["result"] = serde_json::json!({ "content": [ { "type": "text", "text": text_payload } ] });
                     }
-			Err(err) => {
+                    Err(err) => {
                         out["error"] = serde_json::json!({ "code": -32000, "message": err });
                     }
                 }

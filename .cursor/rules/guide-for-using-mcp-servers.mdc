@@ -10,62 +10,37 @@ alwaysApply: true
 
 - [MCP Server AI Agent Usage Guide](#mcp-server-ai-agent-usage-guide)
   - [Table of Contents](#table-of-contents)
-  - [Memory MCP Server](#memory-mcp-server)
+  - [Sequential Thinking MCP Server](#sequential-thinking-mcp-server)
     - [Purpose](#purpose)
     - [Supported Operations](#supported-operations)
-  - [Sequential Thinking MCP Server](#sequential-thinking-mcp-server)
-    - [Purpose](#purpose-1)
-    - [Supported Operations](#supported-operations-1)
       - [Additional Inputs](#additional-inputs)
   - [FileSystem MCP Server](#filesystem-mcp-server)
+    - [Purpose](#purpose-1)
+    - [Supported Operations](#supported-operations-1)
+  - [Fetch MCP Server](#fetch-mcp-server)
     - [Purpose](#purpose-2)
     - [Supported Operations](#supported-operations-2)
-  - [Fetch MCP Server](#fetch-mcp-server)
+  - [Git MCP Server](#git-mcp-server)
     - [Purpose](#purpose-3)
     - [Supported Operations](#supported-operations-3)
-  - [Git MCP Server](#git-mcp-server)
+  - [ShadCN-UI MCP Server](#shadcn-ui-mcp-server)
     - [Purpose](#purpose-4)
     - [Supported Operations](#supported-operations-4)
-  - [ShadCN-UI MCP Server](#shadcn-ui-mcp-server)
+  - [React MCP Server](#react-mcp-server)
     - [Purpose](#purpose-5)
     - [Supported Operations](#supported-operations-5)
-  - [React MCP Server](#react-mcp-server)
+  - [NodeJS MCP Server](#nodejs-mcp-server)
     - [Purpose](#purpose-6)
     - [Supported Operations](#supported-operations-6)
-  - [NodeJS MCP Server](#nodejs-mcp-server)
+  - [Chrome DevTools MCP Server](#chrome-devtools-mcp-server)
     - [Purpose](#purpose-7)
     - [Supported Operations](#supported-operations-7)
-
-
-## Memory MCP Server
-
-### Purpose
-
-Provides persistent, semantic or graph-based memory capabilities that allow storing, querying, and deleting information.
-
-### Supported Operations
-
-- **memory-store:** Store information in memory, possibly with metadata.
-    - Example:
-
-```json
-{ "data": "some information", "metadata": { "topic": "physics" } }
-```
-
-- **memory-query:** Retrieve relevant information based on a query.
-    - Example:
-
-```json
-{ "query": "What did I learn about gravity?" }
-```
-
-- **memory-delete:** Delete specific memory entries.
-    - Example:
-
-```json
-{ "id": "memory_id_to_delete" }
-```
-
+  - [Grep MCP Server](#grep-mcp-server)
+    - [Purpose](#purpose-8)
+    - [Supported Operations](#supported-operations-8)
+  - [MemorizedMCP Server](#memorizedmcp-server)
+    - [Purpose](#purpose-9)
+    - [Supported Operations](#supported-operations-9)
 
 ## Sequential Thinking MCP Server
 
@@ -462,4 +437,512 @@ Controls and automates execution of Node.js scripts, npm scripts, and direct eva
 
 ```json
 "npm-scripts:///projects/my-app"
+```
+
+
+## Chrome DevTools MCP Server
+
+### Purpose
+
+Automates Chrome debugging and page interaction via the DevTools Protocol. Enables navigation, DOM actions, network inspection, performance tracing, and screenshots.
+
+### Supported Operations
+
+- **list_console_messages:** List all console messages for the currently selected page.
+  - Example:
+
+```json
+{}
+```
+
+- **emulate_cpu:** Emulate CPU throttling.
+  - Inputs: `throttlingRate` (number, 1-20)
+  - Example:
+
+```json
+{ "throttlingRate": 4 }
+```
+
+- **emulate_network:** Emulate network conditions.
+  - Inputs: `throttlingOption` ("No emulation" | "Slow 3G" | "Fast 3G" | "Slow 4G" | "Fast 4G")
+  - Example:
+
+```json
+{ "throttlingOption": "Fast 3G" }
+```
+
+- **click:** Click an element.
+  - Inputs: `uid` (string), `dblClick` (optional boolean)
+  - Example:
+
+```json
+{ "uid": "el_123" }
+```
+
+- **drag:** Drag an element onto another.
+  - Inputs: `from_uid` (string), `to_uid` (string)
+  - Example:
+
+```json
+{ "from_uid": "el_item", "to_uid": "el_dropzone" }
+```
+
+- **fill:** Type into an input/textarea or select an option.
+  - Inputs: `uid` (string), `value` (string)
+  - Example:
+
+```json
+{ "uid": "el_email", "value": "user@example.com" }
+```
+
+- **fill_form:** Fill multiple elements at once.
+  - Inputs: `elements`: [{ `uid`, `value` }]
+  - Example:
+
+```json
+{ "elements": [ { "uid": "el_email", "value": "user@example.com" }, { "uid": "el_pwd", "value": "secret" } ] }
+```
+
+- **hover:** Hover over an element.
+  - Inputs: `uid` (string)
+  - Example:
+
+```json
+{ "uid": "el_menu" }
+```
+
+- **upload_file:** Upload a file via an input.
+  - Inputs: `uid` (string), `filePath` (string)
+  - Example:
+
+```json
+{ "uid": "el_file", "filePath": "C:/path/file.png" }
+```
+
+- **get_network_request:** Get a specific network request by URL.
+  - Inputs: `url` (string)
+
+```json
+{ "url": "https://example.com/api/data" }
+```
+
+- **list_network_requests:** List network requests with optional filtering.
+  - Inputs: `pageSize` (optional number), `pageIdx` (optional number), `resourceTypes` (optional array)
+  - Example:
+
+```json
+{ "pageSize": 50, "resourceTypes": ["xhr", "fetch"] }
+```
+
+- **close_page:** Close a page by index (cannot close the last open page).
+  - Inputs: `pageIdx` (number)
+  - Example:
+
+```json
+{ "pageIdx": 1 }
+```
+
+- **handle_dialog:** Accept/dismiss browser dialogs.
+  - Inputs: `action` ("accept" | "dismiss"), `promptText` (optional)
+  - Example:
+
+```json
+{ "action": "accept" }
+```
+
+- **list_pages:** List open pages.
+  - Example:
+
+```json
+{}
+```
+
+- **navigate_page:** Navigate the selected page to a URL.
+  - Inputs: `url` (string)
+  - Example:
+
+```json
+{ "url": "https://example.com" }
+```
+
+- **navigate_page_history:** Go back or forward in history.
+  - Inputs: `navigate` ("back" | "forward")
+  - Example:
+
+```json
+{ "navigate": "back" }
+```
+
+- **new_page:** Create a new page.
+  - Inputs: `url` (string)
+  - Example:
+
+```json
+{ "url": "https://example.com" }
+```
+
+- **resize_page:** Resize the window of the selected page.
+  - Inputs: `width` (number), `height` (number)
+  - Example:
+
+```json
+{ "width": 1280, "height": 800 }
+```
+
+- **select_page:** Select a page by index.
+  - Inputs: `pageIdx` (number)
+  - Example:
+
+```json
+{ "pageIdx": 0 }
+```
+
+- **performance_analyze_insight:** Get details on a specific performance insight.
+  - Inputs: `insightName` (string)
+  - Example:
+
+```json
+{ "insightName": "DocumentLatency" }
+```
+
+- **performance_start_trace:** Start a performance trace, optionally auto-reload/stop.
+  - Inputs: `reload` (boolean), `autoStop` (boolean)
+  - Example:
+
+```json
+{ "reload": true, "autoStop": true }
+```
+
+- **performance_stop_trace:** Stop active trace.
+  - Example:
+
+```json
+{}
+```
+
+- **take_screenshot:** Screenshot page or element.
+  - Inputs: `format` ("png" | "jpeg"), `uid` (optional string), `fullPage` (optional boolean)
+  - Example:
+
+```json
+{ "format": "png", "fullPage": true }
+```
+
+- **evaluate_script:** Evaluate JS on the selected page.
+  - Inputs: `function` (stringified function), `args` (optional array of element refs)
+  - Example:
+
+```json
+{ "function": "() => document.title" }
+```
+
+- **take_snapshot:** Capture a text snapshot of the page to obtain element UIDs.
+  - Example:
+
+```json
+{}
+```
+
+- **wait_for:** Wait for text to appear on the page.
+  - Inputs: `text` (string)
+  - Example:
+
+```json
+{ "text": "Welcome" }
+```
+
+
+## Grep MCP Server
+
+### Purpose
+
+Searches over a large index of public GitHub repositories. Returns code snippets matching patterns with filters for language, repository, and file path.
+
+### Supported Operations
+
+- **grep-search:** Execute a code search.
+  - Inputs:
+    - `query` (string): literal code or regex pattern
+    - `matchCase` (optional boolean)
+    - `matchWholeWords` (optional boolean)
+    - `useRegexp` (optional boolean)
+    - `repo` (optional string)
+    - `path` (optional string)
+    - `language` (optional string[])
+  - Example (regex across languages):
+
+```json
+{
+  "query": "(?s)server\\.tool.*catch",
+  "language": ["TypeScript", "JavaScript"],
+  "useRegexp": true
+}
+```
+
+
+## MemorizedMCP Server
+
+### Purpose
+
+Provides a hybrid memory system (knowledge graph + embeddings + full‑text + documentary memory) for agents to store and retrieve information with rich relationships.
+
+### Supported Operations
+
+- **system.status:** Return health and runtime metrics (uptime, indices, storage, metrics, memory, health).
+  - Example:
+
+```json
+{}
+```
+
+- **system.cleanup:** Maintenance cleanup.
+  - Inputs: `reindex` (boolean), `compact` (boolean)
+  - Example:
+
+```json
+{ "reindex": false, "compact": true }
+```
+
+- **system.backup:** Create a backup snapshot.
+  - Inputs: `destination` (optional string), `includeIndices` (boolean)
+  - Example:
+
+```json
+{ "destination": "./backups", "includeIndices": true }
+```
+
+- **system.restore:** Restore from snapshot.
+  - Inputs: `source` (string), `includeIndices` (boolean)
+  - Example:
+
+```json
+{ "source": "./backups/2025-09-27", "includeIndices": true }
+```
+
+- **document.store:** Ingest PDF/Markdown/Text; parse and index.
+  - Inputs: `path` (optional string), `mime` (optional "pdf"|"md"|"txt"), `content` (optional string), `metadata` (object)
+  - Example:
+
+```json
+{ "mime": "md", "content": "# Title\nHello" }
+```
+
+- **document.retrieve:** Retrieve document by id/hash/path.
+  - Inputs: one of `id` | `hash` | `path`
+  - Example:
+
+```json
+{ "id": "DOC_123" }
+```
+
+- **document.analyze:** Get key concepts, entities, summary, related docs.
+  - Inputs: `id` (string)
+  - Example:
+
+```json
+{ "id": "DOC_123" }
+```
+
+- **document.refs_for_memory:** List document refs associated with a memory.
+  - Inputs: `id` (memory id)
+  - Example:
+
+```json
+{ "id": "MEM_123" }
+```
+
+- **document.refs_for_document:** List memories referencing a document.
+  - Inputs: `id` (document id)
+  - Example:
+
+```json
+{ "id": "DOC_123" }
+```
+
+- **document.validate_refs:** Validate/correct memory↔document references.
+  - Inputs: `fix` (boolean)
+  - Example:
+
+```json
+{ "fix": true }
+```
+
+- **kg.list_entities:** List top entities by mention count.
+  - Inputs: `limit` (number)
+  - Example:
+
+```json
+{ "limit": 50 }
+```
+
+- **kg.get_entity:** Get detailed information about an entity.
+  - Inputs: `entity` (string)
+  - Example:
+
+```json
+{ "entity": "Python" }
+```
+
+- **kg.create_entity:** Create or ensure an entity node exists.
+  - Inputs: `entity` (string)
+  - Example:
+
+```json
+{ "entity": "Python" }
+```
+
+- **kg.create_relation:** Create a relation between two nodes.
+  - Inputs: `src` (string), `dst` (string), `relation` (string, optional)
+  - Example:
+
+```json
+{ "src": "Entity::Python", "dst": "Document::abc123", "relation": "MENTIONS" }
+```
+
+- **kg.search_nodes:** Search nodes by type and pattern.
+  - Inputs: `type` (string, optional), `pattern` (string, optional), `limit` (number)
+  - Example:
+
+```json
+{ "type": "Entity", "pattern": "python", "limit": 10 }
+```
+
+- **kg.read_graph:** Get graph snapshot with configurable limit.
+  - Inputs: `limit` (number)
+  - Example:
+
+```json
+{ "limit": 100 }
+```
+
+- **kg.tag_entity:** Add tags to an entity.
+  - Inputs: `entity` (string), `tags` (array of strings)
+  - Example:
+
+```json
+{ "entity": "Python", "tags": ["language", "backend"] }
+```
+
+- **kg.get_tags:** Get all tags or entities by a specific tag.
+  - Inputs: `tag` (string, optional)
+  - Example:
+
+```json
+{ "tag": "language" }
+```
+
+- **kg.remove_tag:** Remove tags from an entity.
+  - Inputs: `entity` (string), `tags` (array of strings)
+  - Example:
+
+```json
+{ "entity": "Python", "tags": ["backend"] }
+```
+
+- **kg.delete_entity:** Delete an entity and its edges.
+  - Inputs: `entity` (string)
+  - Example:
+
+```json
+{ "entity": "Python" }
+```
+
+- **kg.delete_relation:** Delete a specific relation.
+  - Inputs: `src` (string), `dst` (string), `relation` (string, optional)
+  - Example:
+
+```json
+{ "src": "Entity::Python", "dst": "Document::abc123", "relation": "MENTIONS" }
+```
+
+- **memory.add:** Add a memory; classify STM/LTM; optionally link docs.
+  - Inputs: `content` (string), `metadata` (object, optional), `references` (array of { `docId` (string), `chunkId` (optional string), `score` (optional number) }), `layer_hint` ("STM"|"LTM"), `session_id` (optional string), `episode_id` (optional string)
+  - Example:
+
+```json
+{
+  "content": "User prefers dark mode",
+  "references": [ { "docId": "DOC_123", "chunkId": "2" } ],
+  "layer_hint": "STM"
+}
+```
+
+- **memory.search:** Hybrid search with temporal filters.
+  - Inputs: `q` (string), `limit` (number), `layer` (optional "STM"|"LTM"), `episode` (optional string), `from` (epoch ms), `to` (epoch ms)
+  - Example:
+
+```json
+{ "q": "dark mode", "limit": 20 }
+```
+
+- **memory.update:** Update memory content/metadata.
+  - Inputs: `id` (string), `content` (optional string), `metadata` (optional object)
+  - Example:
+
+```json
+{ "id": "MEM_123", "content": "Updated preference" }
+```
+
+- **memory.delete:** Delete a memory (optionally back up first).
+  - Inputs: `id` (string), `backup` (boolean)
+  - Example:
+
+```json
+{ "id": "MEM_123", "backup": true }
+```
+
+- **advanced.consolidate:** Promote STM → LTM, deduplicate salient memories.
+  - Inputs: `dryRun` (boolean), `limit` (number)
+  - Example:
+
+```json
+{ "dryRun": false, "limit": 100 }
+```
+
+- **advanced.analyze_patterns:** Mine recurring concepts and trends.
+  - Inputs: `window` ({ `from`: number, `to`: number }), `minSupport` (number)
+  - Example:
+
+```json
+{ "window": { "from": 0, "to": 4102444800000 }, "minSupport": 2 }
+```
+
+- **advanced.reindex:** Rebuild indices.
+  - Inputs: `vector` (boolean), `text` (boolean), `graph` (boolean)
+  - Example:
+
+```json
+{ "vector": true, "text": true, "graph": true }
+```
+
+- **advanced.trends:** Time-bucketed memory counts.
+  - Inputs: `from` (number), `to` (number), `buckets` (number)
+  - Example:
+
+```json
+{ "from": 0, "to": 4102444800000, "buckets": 10 }
+```
+
+- **advanced.clusters:** Document clusters.
+  - Inputs: `{}`
+  - Example:
+
+```json
+{}
+```
+
+- **advanced.relationships:** Relationship group counts.
+  - Inputs: `{}`
+  - Example:
+
+```json
+{}
+```
+
+- **advanced.effectiveness:** Memory effectiveness scores.
+  - Inputs: `{}`
+  - Example:
+
+```json
+{}
 ```
