@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🧠 MemorizedMCP
 
 **A high-performance hybrid memory system for AI agents** built on the Model Context Protocol (MCP). MemorizedMCP combines knowledge graphs, vector embeddings, full-text search, and documentary memory to provide intelligent, context-aware information storage and retrieval.
