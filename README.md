@@ -3,7 +3,7 @@
 **A high-performance hybrid memory system for AI agents** built on the Model Context Protocol (MCP). MemorizedMCP combines knowledge graphs, vector embeddings, full-text search, and documentary memory to provide intelligent, context-aware information storage and retrieval.
 
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
-[![MCP](https://img.shields.io/badge/MCP-2024--11--05-blue.svg)](https://modelcontextprotocol.io/)
+[![MCP](https://img.shields.io/badge/MCP-2025--10--01-blue.svg)](https://modelcontextprotocol.io/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
