@@ -492,4 +492,3 @@ NOTE: You can use ${workspaceFolder} or direct path to your project for the DATA
 - `advanced.clusters` → `{}`
 - `advanced.relationships` → `{}`
 - `advanced.effectiveness` → `{}`
->>>>>>> a740da276582963bfd6cab71a02273b1a5a60525
