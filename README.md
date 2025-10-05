@@ -114,7 +114,7 @@ cd MemorizedMCP
 cargo build --release
 ```
 
-The binary will be at `target/release/memory_mcp_server` (or `.exe` on Windows).
+The binary will be at `target/release/memory_mcp_server.exe`.
 
 ---
 
