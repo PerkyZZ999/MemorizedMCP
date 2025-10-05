@@ -105,7 +105,7 @@ MemorizedMCP uses a **fusion architecture** that combines multiple indexing stra
 
 ### Prerequisites
 - **Rust 1.75+** (for building from source)
-- **Windows 10+** / **Linux** / **macOS**
+- **Windows 10+** ( **Linux** / **macOS** never tried )
 
 ### Build from Source
 ```bash
