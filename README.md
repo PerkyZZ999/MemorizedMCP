@@ -1,10 +1,9 @@
-<<<<<<< HEAD
 # 🧠 MemorizedMCP
 
 **A high-performance hybrid memory system for AI agents** built on the Model Context Protocol (MCP). MemorizedMCP combines knowledge graphs, vector embeddings, full-text search, and documentary memory to provide intelligent, context-aware information storage and retrieval.
 
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
-[![MCP](https://img.shields.io/badge/MCP-2024--11--05-blue.svg)](https://modelcontextprotocol.io/)
+[![MCP](https://img.shields.io/badge/MCP-2025--10--01-blue.svg)](https://modelcontextprotocol.io/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -106,7 +105,7 @@ MemorizedMCP uses a **fusion architecture** that combines multiple indexing stra
 
 ### Prerequisites
 - **Rust 1.75+** (for building from source)
-- **Windows 10+** / **Linux** / **macOS**
+- **Windows 10+** ( **Linux** / **macOS** never tried )
 
 ### Build from Source
 ```bash
@@ -115,7 +114,7 @@ cd MemorizedMCP
 cargo build --release
 ```
 
-The binary will be at `target/release/memory_mcp_server` (or `.exe` on Windows).
+The binary will be at `target/release/memory_mcp_server.exe`.
 
 ---
 
@@ -493,4 +492,3 @@ NOTE: You can use ${workspaceFolder} or direct path to your project for the DATA
 - `advanced.clusters` → `{}`
 - `advanced.relationships` → `{}`
 - `advanced.effectiveness` → `{}`
->>>>>>> a740da276582963bfd6cab71a02273b1a5a60525
