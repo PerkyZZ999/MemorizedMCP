@@ -228,7 +228,35 @@ async fn main() -> Result<()> {
 
 	let dirs = ensure_data_dirs(&data_dir)?;
 	let db_path = dirs.warm.join("kv");
-	let db = sled::open(db_path)?;
+	let pid_file = dirs.warm.join("server.pid");
+	
+	// Check for and handle stale server instances
+	handle_stale_instance(&pid_file)?;
+	
+	// Write our PID to file
+	std::fs::write(&pid_file, std::process::id().to_string())?;
+	info!("Server PID {} written to {:?}", std::process::id(), pid_file);
+	
+	// Configure Sled to handle concurrent access and quick restarts
+	let db_config = sled::Config::new()
+		.path(&db_path)
+		.cache_capacity(64_000_000)
+		.flush_every_ms(Some(1000))
+		.mode(sled::Mode::HighThroughput);
+	
+	// Open database (should work now after cleaning stale instances)
+	let db = match db_config.open() {
+		Ok(db) => {
+			info!("Database opened successfully");
+			db
+		}
+		Err(e) => {
+			error!("Failed to open database: {}", e);
+			// Clean up our PID file since we're failing
+			let _ = std::fs::remove_file(&pid_file);
+			return Err(e.into());
+		}
+	};
 
 	// Initialize persistent settings KV with effective config
 	{
@@ -267,6 +295,9 @@ async fn main() -> Result<()> {
 				.expect("server error");
 		});
 		tasks.push(http_task);
+		
+		// Give HTTP server a moment to start up
+		sleep(Duration::from_millis(100)).await;
 	}
 
 	// STDIO stub (non-blocking)
@@ -276,10 +307,40 @@ async fn main() -> Result<()> {
 		tasks.push(stdio_task);
 	}
 
-	// Wait for Ctrl+C then exit
+	// Wait for Ctrl+C only - stdio handler will exit naturally when connection closes
 	signal::ctrl_c().await?;
 	info!("Shutdown signal received");
-	for t in tasks { let _ = t.abort(); }
+	
+	// Graceful shutdown
+	info!("Flushing database...");
+	if let Err(e) = state.db.flush_async().await {
+		error!("Failed to flush database: {}", e);
+	}
+	
+	info!("Stopping tasks...");
+	for t in tasks {
+		t.abort();
+	}
+	
+	// Give tasks time to cleanup
+	sleep(Duration::from_millis(200)).await;
+	
+	// Explicitly drop the database to release locks
+	info!("Closing database...");
+	drop(state);
+	
+	// Remove PID file
+	let pid_file = std::path::PathBuf::from(&data_dir).join("warm").join("server.pid");
+	if let Err(e) = std::fs::remove_file(&pid_file) {
+		info!("Could not remove PID file (may not exist): {}", e);
+	} else {
+		info!("PID file removed");
+	}
+	
+	// Give OS time to release file locks
+	sleep(Duration::from_millis(100)).await;
+	
+	info!("Server shutdown complete");
 	Ok(())
 }
 
@@ -306,6 +367,71 @@ fn ensure_data_dirs(root: &str) -> Result<DataDirs> {
 }
 
 struct DataDirs { warm: std::path::PathBuf, index: std::path::PathBuf }
+
+fn handle_stale_instance(pid_file: &std::path::Path) -> Result<()> {
+	use std::fs;
+	
+	// Check if PID file exists
+	if let Ok(pid_str) = fs::read_to_string(pid_file) {
+		if let Ok(old_pid) = pid_str.trim().parse::<u32>() {
+			info!("Found existing PID file with PID: {}", old_pid);
+			
+			// Check if process is still running (Windows-specific)
+			#[cfg(target_os = "windows")]
+			{
+				use std::process::Command;
+				let output = Command::new("tasklist")
+					.args(&["/FI", &format!("PID eq {}", old_pid), "/NH"])
+					.output();
+				
+				if let Ok(output) = output {
+					let output_str = String::from_utf8_lossy(&output.stdout);
+					if output_str.contains(&old_pid.to_string()) {
+						info!("Process {} is still running, attempting to kill it", old_pid);
+						// Try to kill the old process
+						let _ = Command::new("taskkill")
+							.args(&["/F", "/PID", &old_pid.to_string()])
+							.output();
+						// Wait a moment for process to die and release locks
+						std::thread::sleep(std::time::Duration::from_millis(500));
+					} else {
+						info!("Process {} is not running (stale PID file)", old_pid);
+					}
+				}
+			}
+			
+			// Check if process is still running (Unix-specific)
+			#[cfg(not(target_os = "windows"))]
+			{
+				use std::process::Command;
+				// Try to send signal 0 (existence check)
+				let result = Command::new("kill")
+					.args(&["-0", &old_pid.to_string()])
+					.output();
+				
+				if result.is_ok() {
+					info!("Process {} is still running, attempting to kill it", old_pid);
+					// Try to kill gracefully first (SIGTERM)
+					let _ = Command::new("kill")
+						.args(&[&old_pid.to_string()])
+						.output();
+					std::thread::sleep(std::time::Duration::from_millis(500));
+				} else {
+					info!("Process {} is not running (stale PID file)", old_pid);
+				}
+			}
+			
+			// Remove stale PID file
+			let _ = fs::remove_file(pid_file);
+			info!("Removed stale PID file");
+			
+			// Give OS time to fully release file locks
+			std::thread::sleep(std::time::Duration::from_millis(500));
+		}
+	}
+	
+	Ok(())
+}
 
 fn build_router(state: Arc<AppState>) -> Router {
 	Router::new()
@@ -358,6 +484,12 @@ fn build_router(state: Arc<AppState>) -> Router {
 
 async fn proxy_tool_via_http(tool_name: &str, args: &serde_json::Value) -> Result<serde_json::Value, String> {
     let bind = std::env::var("HTTP_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+    
+    // If HTTP_BIND is explicitly empty, HTTP server is disabled
+    if bind.is_empty() {
+        return Err("HTTP server is disabled. Cannot proxy tool calls.".to_string());
+    }
+    
     let base = format!("http://{}", bind);
     // Map tool names to method and path (support both dot and underscore notation)
     let (method, path) = match tool_name {
@@ -438,35 +570,62 @@ async fn proxy_tool_via_http(tool_name: &str, args: &serde_json::Value) -> Resul
         _ => return Err(format!("Unknown tool: {}", tool_name)),
     };
     let url = format!("{}{}", base, path);
-    let client = reqwest::Client::new();
-    let resp_result = if method == "GET" {
-        let mut qp: Vec<(String, String)> = Vec::new();
-        if let Some(map) = args.as_object() {
-            for (k, v) in map.iter() {
-                let s = if v.is_string() || v.is_number() || v.is_boolean() { v.to_string().trim_matches('"').to_string() } else { v.to_string() };
-                qp.push((k.clone(), s));
-            }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    
+    // Retry logic for connection issues (e.g., HTTP server not ready yet)
+    let max_retries = 3;
+    let mut last_error = String::new();
+    
+    for attempt in 0..max_retries {
+        if attempt > 0 {
+            // Small delay before retry
+            sleep(Duration::from_millis(100 * (attempt as u64))).await;
         }
-        client.get(&url).query(&qp).send().await
-    } else {
-        client.post(&url).json(args).send().await
-    };
-    match resp_result {
-        Ok(resp) => {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            if status.is_success() {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                    Ok(val)
-                } else {
-                    Ok(serde_json::Value::String(text))
+        
+        let resp_result = if method == "GET" {
+            let mut qp: Vec<(String, String)> = Vec::new();
+            if let Some(map) = args.as_object() {
+                for (k, v) in map.iter() {
+                    let s = if v.is_string() || v.is_number() || v.is_boolean() { 
+                        v.to_string().trim_matches('"').to_string() 
+                    } else { 
+                        v.to_string() 
+                    };
+                    qp.push((k.clone(), s));
                 }
-            } else {
-                Err(format!("HTTP {}: {}", status.as_u16(), text))
+            }
+            client.get(&url).query(&qp).send().await
+        } else {
+            client.post(&url).json(args).send().await
+        };
+        
+        match resp_result {
+            Ok(resp) => {
+                let status = resp.status();
+                let text = resp.text().await.unwrap_or_default();
+                if status.is_success() {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                        return Ok(val);
+                    } else {
+                        return Ok(serde_json::Value::String(text));
+                    }
+                } else {
+                    return Err(format!("HTTP {}: {}", status.as_u16(), text));
+                }
+            }
+            Err(e) => {
+                last_error = format!("Connection failed (attempt {}/{}): {}", attempt + 1, max_retries, e);
+                if attempt < max_retries - 1 {
+                    info!("Retrying HTTP request: {}", last_error);
+                }
             }
         }
-        Err(e) => Err(e.to_string()),
     }
+    
+    Err(last_error)
 }
 
 async fn health() -> Json<Health> { Json(Health { status: "ok" }) }
@@ -1116,76 +1275,212 @@ fn index_memory_sled(db: &sled::Db, mem_id: &str, content: &str) -> Result<()> {
 }
 
 async fn run_stdio(_state: Arc<AppState>) {
+	use tokio::io::stdout;
+	use tokio::time::timeout;
+	
 	let stdin = tokio::io::stdin();
 	let mut reader = BufReader::new(stdin).lines();
-	while let Ok(Some(line)) = reader.next_line().await {
+	let stdout = Arc::new(AsyncMutex::new(stdout()));
+	
+	info!("STDIO MCP handler started");
+	
+	// Track active requests to limit concurrency
+	let active_requests = Arc::new(AsyncMutex::new(0_usize));
+	const MAX_CONCURRENT_REQUESTS: usize = 10;
+	
+	loop {
+		// Read next line with proper error handling
+		let line_result = reader.next_line().await;
+		
+		let line = match line_result {
+			Ok(Some(l)) => l,
+			Ok(None) => {
+				info!("Stdin closed (EOF), shutting down stdio handler");
+				break;
+			}
+			Err(e) => {
+				error!("Error reading from stdin: {}, shutting down", e);
+				break;
+			}
+		};
+		
 		let line = line.trim();
 		if line.is_empty() { continue; }
-        let v: serde_json::Value = match serde_json::from_str(line) { Ok(x) => x, Err(_) => continue };
-        let id_val_opt = v.get("id").cloned();
-        let method = v.get("method").and_then(|m| m.as_str()).unwrap_or("");
-        let params = v.get("params").cloned().unwrap_or(serde_json::json!({}));
-        // Ignore notifications (no id), including notifications/initialized
-        if id_val_opt.is_none() || id_val_opt.as_ref().map(|x| x.is_null()).unwrap_or(true) {
-            // Optionally handle side-effects for known notifications here
-            continue;
-        }
-        let id_val = id_val_opt.unwrap();
-        match method {
-            "initialize" => {
-                let result = serde_json::json!({
-                    "serverInfo": {
-                        "name": "memorized-mcp",
-                        "version": env!("CARGO_PKG_VERSION"),
-                        "instructions": "MemorizedMCP: hybrid memory server exposing tools over MCP."
-                    },
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": { "tools": { "listChanged": true, "call": {} }, "logging": {}, "sampling": {} }
-                });
-                let mut out = serde_json::json!({ "jsonrpc": "2.0", "id": serde_json::Value::Null });
-                out["id"] = id_val.clone();
-                out["result"] = result;
-                println!("{}", serde_json::to_string(&out).unwrap());
-            }
-            "tools/list" => {
-                let tools = list_tools().into_iter().map(|t| serde_json::json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": true }
-                })).collect::<Vec<_>>();
-                let mut out = serde_json::json!({ "jsonrpc": "2.0", "id": serde_json::Value::Null });
-                out["id"] = id_val.clone();
-                out["result"] = serde_json::json!({ "tools": tools });
-                println!("{}", serde_json::to_string(&out).unwrap());
-            }
-            "tools/call" => {
-                let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                let arguments = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
-                let mut out = serde_json::json!({ "jsonrpc": "2.0", "id": serde_json::Value::Null });
-                out["id"] = id_val.clone();
-                match proxy_tool_via_http(name, &arguments).await {
-                    Ok(json_val) => {
-                        let text_payload = if let Some(s) = json_val.as_str() {
-                            s.to_string()
-                        } else {
-                            serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| json_val.to_string())
-                        };
-                        out["result"] = serde_json::json!({ "content": [ { "type": "text", "text": text_payload } ] });
-                    }
-                    Err(err) => {
-                        out["error"] = serde_json::json!({ "code": -32000, "message": err });
-                    }
-                }
-                println!("{}", serde_json::to_string(&out).unwrap());
-            }
-            _ => {
-                let mut out = serde_json::json!({ "jsonrpc": "2.0", "id": serde_json::Value::Null });
-                out["id"] = id_val;
-                out["error"] = serde_json::json!({ "code": -32601, "message": format!("Unknown method: {}", method) });
-                println!("{}", serde_json::to_string(&out).unwrap());
-            }
-        }
-    }
+		
+		// Parse JSON-RPC request
+		let v: serde_json::Value = match serde_json::from_str(&line) {
+			Ok(x) => x,
+			Err(e) => {
+				error!("Failed to parse JSON-RPC request: {}", e);
+				// Send error response for malformed JSON
+				let error_response = serde_json::json!({
+					"jsonrpc": "2.0",
+					"id": null,
+					"error": { "code": -32700, "message": format!("Parse error: {}", e) }
+				});
+				if let Err(write_err) = write_response(stdout.clone(), &error_response).await {
+					error!("Failed to write error response: {}", write_err);
+					break;
+				}
+				continue;
+			}
+		};
+		
+		let id_val_opt = v.get("id").cloned();
+		let method = v.get("method").and_then(|m| m.as_str()).unwrap_or("");
+		let params = v.get("params").cloned().unwrap_or(serde_json::json!({}));
+		
+		// Ignore notifications (no id), including notifications/initialized
+		if id_val_opt.is_none() || id_val_opt.as_ref().map(|x| x.is_null()).unwrap_or(true) {
+			info!("Received notification: {}", method);
+			continue;
+		}
+		
+		let id_val = id_val_opt.unwrap();
+		info!("Received request: method={}, id={}", method, id_val);
+		
+		// Check concurrent request limit
+		{
+			let mut count = active_requests.lock().await;
+			if *count >= MAX_CONCURRENT_REQUESTS {
+				error!("Too many concurrent requests, rejecting: method={}", method);
+				let error_response = serde_json::json!({
+					"jsonrpc": "2.0",
+					"id": id_val,
+					"error": { "code": -32000, "message": "Too many concurrent requests" }
+				});
+				if let Err(e) = write_response(stdout.clone(), &error_response).await {
+					error!("Failed to write rate limit error: {}", e);
+					break;
+				}
+				continue;
+			}
+			*count += 1;
+		}
+		
+		// Process request concurrently
+		let stdout_clone = stdout.clone();
+		let active_requests_clone = active_requests.clone();
+		let method_str = method.to_string();
+		let id_val_clone = id_val.clone();
+		
+		tokio::spawn(async move {
+			// Set timeout for request processing
+			let request_timeout = Duration::from_secs(60);
+			
+			let response_result = timeout(request_timeout, async {
+				process_request(&method_str, &params, &id_val_clone).await
+			}).await;
+			
+			let response_json = match response_result {
+				Ok(response) => response,
+				Err(_) => {
+					error!("Request timeout: method={}, id={}", method_str, id_val_clone);
+					serde_json::json!({
+						"jsonrpc": "2.0",
+						"id": id_val_clone,
+						"error": { "code": -32000, "message": "Request timeout" }
+					})
+				}
+			};
+			
+			// Write response
+			if let Err(e) = write_response(stdout_clone, &response_json).await {
+				error!("Failed to write response for method={}: {}", method_str, e);
+			} else {
+				info!("Response sent for method={}, id={}", method_str, id_val_clone);
+			}
+			
+			// Decrement active request count
+			let mut count = active_requests_clone.lock().await;
+			*count = count.saturating_sub(1);
+		});
+	}
+	
+	// Wait for active requests to complete before exiting
+	let wait_start = std::time::Instant::now();
+	while wait_start.elapsed() < Duration::from_secs(2) {
+		let count = *active_requests.lock().await;
+		if count == 0 {
+			break;
+		}
+		info!("Waiting for {} active requests to complete...", count);
+		sleep(Duration::from_millis(100)).await;
+	}
+	
+	info!("STDIO handler exiting (active requests: {})", *active_requests.lock().await);
+}
+
+async fn process_request(method: &str, params: &serde_json::Value, id_val: &serde_json::Value) -> serde_json::Value {
+	match method {
+		"initialize" => {
+			let result = serde_json::json!({
+				"serverInfo": {
+					"name": "memorized-mcp",
+					"version": env!("CARGO_PKG_VERSION"),
+					"instructions": "MemorizedMCP: hybrid memory server exposing tools over MCP."
+				},
+				"protocolVersion": "2024-11-05",
+				"capabilities": { "tools": { "listChanged": true, "call": {} }, "logging": {}, "sampling": {} }
+			});
+			serde_json::json!({ "jsonrpc": "2.0", "id": id_val, "result": result })
+		}
+		"tools/list" => {
+			let tools = list_tools().into_iter().map(|t| serde_json::json!({
+				"name": t.name,
+				"description": t.description,
+				"inputSchema": { "type": "object", "properties": {}, "additionalProperties": true }
+			})).collect::<Vec<_>>();
+			serde_json::json!({ "jsonrpc": "2.0", "id": id_val, "result": { "tools": tools } })
+		}
+		"tools/call" => {
+			let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+			let arguments = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+			
+			match proxy_tool_via_http(name, &arguments).await {
+				Ok(json_val) => {
+					let text_payload = if let Some(s) = json_val.as_str() {
+						s.to_string()
+					} else {
+						serde_json::to_string_pretty(&json_val).unwrap_or_else(|_| json_val.to_string())
+					};
+					serde_json::json!({
+						"jsonrpc": "2.0",
+						"id": id_val,
+						"result": { "content": [ { "type": "text", "text": text_payload } ] }
+					})
+				}
+				Err(err) => {
+					error!("Tool call failed: tool={}, error={}", name, err);
+					serde_json::json!({
+						"jsonrpc": "2.0",
+						"id": id_val,
+						"error": { "code": -32000, "message": err }
+					})
+				}
+			}
+		}
+		_ => {
+			serde_json::json!({
+				"jsonrpc": "2.0",
+				"id": id_val,
+				"error": { "code": -32601, "message": format!("Unknown method: {}", method) }
+			})
+		}
+	}
+}
+
+async fn write_response(stdout: Arc<AsyncMutex<tokio::io::Stdout>>, response: &serde_json::Value) -> Result<(), std::io::Error> {
+	use tokio::io::AsyncWriteExt;
+	
+	let response_str = serde_json::to_string(response).unwrap();
+	let mut stdout_guard = stdout.lock().await;
+	
+	stdout_guard.write_all(response_str.as_bytes()).await?;
+	stdout_guard.write_all(b"\n").await?;
+	stdout_guard.flush().await?;
+	
+	Ok(())
 }
 
 async fn memory_add(axum::extract::State(state): axum::extract::State<Arc<AppState>>, Json(req): Json<AddMemoryRequest>) -> Response {
