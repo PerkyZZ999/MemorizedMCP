@@ -1,0 +1,41 @@
+version = 1
+
+# Exclude patterns - files/folders DeepSource should ignore
+exclude_patterns = [
+  "node_modules/**",
+  "dist/**",
+  "build/**",
+  "coverage/**",
+  "*.min.js",
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml"
+]
+
+# Test patterns - mark these as test files
+test_patterns = [
+  "**/__tests__/**",
+  "**/*.test.ts",
+  "**/*.test.js",
+  "**/*.spec.ts",
+  "**/*.spec.js",
+  "tests/**"
+]
+
+# JavaScript/TypeScript Analyzer
+[[analyzers]]
+name = "javascript"
+enabled = true
+
+  [analyzers.meta]
+  environment = ["nodejs"]
+
+# Test Coverage Analyzer
+[[analyzers]]
+name = "test-coverage"
+enabled = true
+
+# Prettier Transformer (auto-formatting)
+[[transformers]]
+name = "prettier"
+enabled = true
