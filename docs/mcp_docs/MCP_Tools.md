@@ -1,6 +1,7 @@
 # MCP Tool Calls Reference
 
 ## Conventions
+
 - All arguments and returns are JSON.
 - Timestamps are epoch milliseconds.
 - MCP responses use structured content:
@@ -15,53 +16,67 @@
 ## Memory
 
 ### memory.add
+
 - Description: Add a memory; classify STM/LTM; index into vector/text/KG; optionally link docs.
 - Arguments:
+
 ```json
 {
   "content": "string",
-  "metadata": {"any": "optional"},
-  "references": [{ "docId": "string", "chunkId": "string(optional)", "score": 0.0 }],
-  "layer_hint": "STM|LTM",          
+  "metadata": { "any": "optional" },
+  "references": [
+    { "docId": "string", "chunkId": "string(optional)", "score": 0.0 }
+  ],
+  "layer_hint": "STM|LTM",
   "session_id": "string(optional)",
   "episode_id": "string(optional)"
 }
 ```
+
 - Returns: `{ "id": string, "layer": "STM"|"LTM" }`
 - Notes:
   - Field is `layer_hint` (snake case) in JSON.
   - `references[].docId/chunkId/score` are supported; missing `score` is computed by Jaccard over entities.
 
 ### memory.search
+
 - Description: Hybrid search across vector, graph, and text indices with temporal filters.
 - Arguments (GET semantics):
+
 ```json
 {
-  "q": "string",                  
-  "limit": 10,                      
+  "q": "string",
+  "limit": 10,
   "layer": "STM|LTM(optional)",
   "episode": "string(optional)",
-  "from": 0,                       
-  "to": 9999999999999              
+  "from": 0,
+  "to": 9999999999999
 }
 ```
+
 - Returns: `{ "results": [{ "id", "score", "layer", "docRefs"?, "explain"? }], "tookMs": number }`
 - Notes:
   - Query parameter is `q` (alias fields like `query` are not interpreted by the server).
   - `from`/`to` are epoch ms filters.
 
 ### memory.update
+
 - Arguments:
+
 ```json
-{ "id": "string", "content": "string(optional)", "metadata": { } }
+{ "id": "string", "content": "string(optional)", "metadata": {} }
 ```
+
 - Returns: `{ "id", "version", "reembedded": boolean, "updatedIndices": ["text","vector"] }`
 
 ### memory.delete
+
 - Arguments:
+
 ```json
 { "id": "string", "backup": true }
 ```
+
 - Returns: `{ "deleted": boolean, "cascaded": boolean }`
 
 ---
@@ -69,42 +84,59 @@
 ## Document
 
 ### document.store
+
 - Description: Ingest PDF/Markdown/Text; parse, chunk, embed, index; version by path.
 - Arguments (POST):
+
 ```json
-{ "path": "string(optional)", "mime": "pdf|md|txt(optional)", "content": "string(optional)", "metadata": { } }
+{
+  "path": "string(optional)",
+  "mime": "pdf|md|txt(optional)",
+  "content": "string(optional)",
+  "metadata": {}
+}
 ```
+
 - Returns: `{ "id": string, "hash": string, "chunks": number }`
 
 ### document.retrieve
+
 - Description: Retrieve document by id/hash/path.
 - Arguments (GET):
+
 ```json
-{ "id": "string" }   // or { "hash": "..." } or { "path": "..." }
+{ "id": "string" } // or { "hash": "..." } or { "path": "..." }
 ```
+
 - Returns: `{ "id": string, "chunks": [{ "id": string, "position": { "start": number, "end": number } }], "metadata": object|null }`
 - Notes:
   - `includeText` is not currently used by the server.
 
 ### document.analyze
+
 - Description: Analyze document; returns key concepts, entities, summary, and related docs.
 - Arguments (GET):
+
 ```json
 { "id": "string" }
 ```
+
 - Returns: `{ "id", "keyConcepts": string[], "entities": string[], "summary": string|null, "docRefs": [{ "docId": string, "score": number }] }`
 - Notes:
   - Flags like `includeEntities`/`includeSummary` are currently ignored.
 
 ### document.refs_for_memory
+
 - Arguments (GET): `{ "id": "<MEM_ID>" }`
 - Returns: `{ "id": string, "docRefs": [{ "docId": string, "chunkId": string|null, "score": number }] }`
 
 ### document.refs_for_document
+
 - Arguments (GET): `{ "id": "<DOC_ID>" }`
 - Returns: `{ "id": string, "memories": [{ "memoryId": string, "chunkId": string|null, "score": number }] }`
 
 ### document.validate_refs
+
 - Arguments (POST): `{ "fix": boolean }`
 - Returns: `{ "invalid": string[], "removed": number|null }`
 
@@ -113,25 +145,31 @@
 ## Knowledge Graph
 
 ### kg.list_entities
+
 - Description: List top entities by mention count.
 - Arguments (GET):
+
 ```json
 {
   "limit": 50
 }
 ```
+
 - Returns: `{ "entities": [["EntityName", count], ...] }`
 - Notes:
   - Returns entities as tuples: `[name, mention_count]` sorted by count descending.
 
 ### kg.get_entity
+
 - Description: Get detailed information about a specific entity.
 - Arguments (GET):
+
 ```json
 {
   "entity": "string"
 }
 ```
+
 - Returns: `{ "entity": string, "node": object, "docs": string[], "relations": array, "docCount": number }`
 - Notes:
   - `node`: The entity node metadata including tags.
@@ -139,20 +177,25 @@
   - `relations`: Edges from this entity to other nodes.
 
 ### kg.create_entity
+
 - Description: Create or ensure an entity node exists in the knowledge graph.
 - Arguments (POST):
+
 ```json
 {
   "entity": "string"
 }
 ```
+
 - Returns: `{ "entity": string, "created": true }`
 - Notes:
   - Idempotent operation; creates if doesn't exist.
 
 ### kg.create_relation
+
 - Description: Create a relation/edge between two nodes.
 - Arguments (POST):
+
 ```json
 {
   "src": "string",
@@ -160,14 +203,17 @@
   "relation": "RELATED|MENTIONS|EVIDENCE|custom"
 }
 ```
+
 - Returns: `{ "src": string, "dst": string, "relation": string, "created": true }`
 - Notes:
   - `src` and `dst` must be full node keys (e.g., `"Entity::Python"`, `"Document::abc123"`).
   - Default relation is `"RELATED"` if not specified.
 
 ### kg.search_nodes
+
 - Description: Search nodes by type and/or label pattern.
 - Arguments (GET):
+
 ```json
 {
   "type": "Entity|Document|Memory|Episode(optional)",
@@ -175,33 +221,40 @@
   "limit": 50
 }
 ```
+
 - Returns: `{ "nodes": [{ "type": string, "label": string, "nodeKey": string, ... }], "count": number }`
 - Notes:
   - Case-insensitive pattern matching on node keys, labels, and IDs.
   - Omit `type` to search all node types.
 
 ### kg.read_graph
+
 - Description: Get a graph snapshot with configurable entity limit.
 - Arguments (GET):
+
 ```json
 {
   "limit": 100
 }
 ```
+
 - Returns: `{ "nodes": string[], "edges": [[src, dst, relation], ...] }`
 - Notes:
   - Returns a petgraph-compatible structure.
   - Includes entities and documents with MENTIONS edges.
 
 ### kg.tag_entity
+
 - Description: Add tags to an entity node.
 - Arguments (POST):
+
 ```json
 {
   "entity": "string",
   "tags": ["tag1", "tag2", ...]
 }
 ```
+
 - Returns: `{ "entity": string, "tags": string[], "tagged": true }`
 - Notes:
   - Tags are stored as an array in the entity node's metadata.
@@ -209,11 +262,14 @@
   - Merges with existing tags (deduplicates).
 
 ### kg.get_tags
+
 - Description: Get all tags or entities by a specific tag.
 - Arguments (GET):
+
 ```json
 { "tag": "string(optional)" }
 ```
+
 - Returns:
   - If `tag` provided: `{ "tag": string, "entities": string[] }`
   - If no `tag`: `{ "tags": string[] }`
@@ -221,32 +277,40 @@
   - Returns all unique tags across entities when `tag` param is omitted.
 
 ### kg.remove_tag
+
 - Description: Remove tags from an entity.
 - Arguments (POST):
+
 ```json
 {
   "entity": "string",
   "tags": ["tag1", "tag2", ...]
 }
 ```
+
 - Returns: `{ "entity": string, "removed": string[], "success": true }`
 
 ### kg.delete_entity
+
 - Description: Delete an entity node and all its edges.
 - Arguments (POST):
+
 ```json
 {
   "entity": "string"
 }
 ```
+
 - Returns: `{ "entity": string, "deleted": true, "removedItems": number }`
 - Notes:
   - Cascades deletion to all edges involving this entity.
   - Removes from entity count and link trees.
 
 ### kg.delete_relation
+
 - Description: Delete a specific relation/edge.
 - Arguments (POST):
+
 ```json
 {
   "src": "string",
@@ -254,6 +318,7 @@
   "relation": "string(optional, defaults to RELATED)"
 }
 ```
+
 - Returns: `{ "src": string, "dst": string, "relation": string, "deleted": boolean }`
 - Notes:
   - Must match exact node keys and relation type.
@@ -263,7 +328,9 @@
 ## System
 
 ### system.status
+
 - Returns:
+
 ```json
 {
   "uptime_ms": number,
@@ -274,18 +341,22 @@
   "health": "ok"|"degraded"
 }
 ```
+
 - Notes:
   - Field names are snake_case for `memory` (rss_mb, stm_count, ltm_count).
 
 ### system.cleanup
+
 - Arguments (POST): `{ "reindex": boolean, "compact": boolean }`
 - Returns: `{ "removedText": number, "removedEdges": number, "reindexed": boolean, "compacted": boolean }`
 
 ### system.backup
+
 - Arguments (POST): `{ "destination": "string(optional)", "includeIndices": boolean }`
 - Returns: `{ "path": string, "sizeMb": number, "tookMs": number }`
 
 ### system.restore
+
 - Arguments (POST): `{ "source": "string", "includeIndices": boolean }`
 - Returns: `{ "restored": boolean, "validated": boolean, "tookMs": number }`
 
@@ -294,30 +365,37 @@
 ## Advanced
 
 ### advanced.consolidate
+
 - Arguments (POST): `{ "dryRun": boolean, "limit": number }`
 - Returns: `{ "promoted": number, "candidates": number, "tookMs": number }`
 
 ### advanced.analyze_patterns
+
 - Arguments (POST): `{ "window": { "from": number, "to": number }, "minSupport": number }`
 - Returns: `{ "patterns": [{ "concept": string, "support": number, "trend": "flat"|"up"|"down" }] }`
 
 ### advanced.reindex
+
 - Arguments (POST): `{ "vector": boolean, "text": boolean, "graph": boolean }`
 - Returns: `{ "vector": boolean, "text": boolean, "graph": boolean, "tookMs": number }`
 
 ### advanced.trends
+
 - Arguments (POST): `{ "from": number, "to": number, "buckets": number }`
 - Returns: `{ "timeline": [{ "start": number, "end": number, "STM": number, "LTM": number }] }`
 
 ### advanced.clusters
+
 - Arguments (POST): `{}`
 - Returns: `{ "clusters": [{ "docs": string[] }] }`
 
 ### advanced.relationships
+
 - Arguments (POST): `{}`
 - Returns: `{ "relationships": [{ "group": string, "count": number }] }`
 
 ### advanced.effectiveness
+
 - Arguments (POST): `{}`
 - Returns: `{ "effectiveness": [{ "id": string, "score": number }] }`
 
@@ -326,6 +404,7 @@
 ## Examples
 
 ### Add + Search
+
 ```json
 // memory.add
 {"content":"Project kickoff notes"}
@@ -335,6 +414,7 @@
 ```
 
 ### Document Flow
+
 ```json
 // document.store
 {"mime":"md","content":"# Title\nHello"}
@@ -347,6 +427,7 @@
 ```
 
 ### Ops
+
 ```json
 // advanced.reindex
 {"vector":true,"text":true,"graph":true}
@@ -359,6 +440,7 @@
 ```
 
 ### Knowledge Graph
+
 ```json
 // kg.create_entity
 {"entity":"Python"}

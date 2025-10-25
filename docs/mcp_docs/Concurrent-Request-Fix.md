@@ -3,6 +3,7 @@
 ## Problem: Connection Closed on Auto-Approve
 
 **Symptoms:**
+
 - MemorizedMCP works fine for single requests
 - Connection closes when using Kilo Code's "auto-approve" feature for multiple tools
 - Error: `MCP error -32000: Connection closed`
@@ -23,6 +24,7 @@ The original stdio handler processed requests **sequentially** - it had to compl
 ### Key Improvements
 
 #### 1. **Concurrent Request Processing**
+
 ```rust
 // Process each request in its own task
 tokio::spawn(async move {
@@ -36,6 +38,7 @@ tokio::spawn(async move {
 ---
 
 #### 2. **Request Timeout**
+
 ```rust
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -49,6 +52,7 @@ let response_result = timeout(REQUEST_TIMEOUT, async {
 ---
 
 #### 3. **Concurrency Limiting**
+
 ```rust
 const MAX_CONCURRENT_REQUESTS: usize = 10;
 
@@ -62,6 +66,7 @@ if active_requests >= MAX_CONCURRENT_REQUESTS {
 ---
 
 #### 4. **Protected Stdout Writes**
+
 ```rust
 let stdout = Arc::new(AsyncMutex::new(stdout()));
 
@@ -77,6 +82,7 @@ async fn write_response(stdout: Arc<AsyncMutex<Stdout>>, response: &Value) {
 ---
 
 #### 5. **Better Error Recovery**
+
 ```rust
 // Parse errors no longer break the connection
 match serde_json::from_str(line) {
@@ -96,21 +102,23 @@ match serde_json::from_str(line) {
 ## Technical Details
 
 ### Before (Sequential Processing)
+
 ```
 Request 1 arrives → Process → HTTP call (3 retries × 100ms) → Respond → [done]
 Request 2 arrives → Process → HTTP call → Respond → [done]
 Request 3 arrives → Process → HTTP call → Respond → [done]
-                    
+
 Total time: ~900ms+ (sequential)
 If Request 1 times out → Connection dies ❌
 ```
 
 ### After (Concurrent Processing)
+
 ```
 Request 1 arrives → Spawn task → Process → Respond
 Request 2 arrives → Spawn task → Process → Respond
 Request 3 arrives → Spawn task → Process → Respond
-                    
+
 Total time: ~300ms+ (parallel)
 If Request 1 times out → Only Request 1 fails, others continue ✅
 ```
@@ -126,8 +134,8 @@ You can tune the concurrent request handling:
 ```json
 {
   "env": {
-    "MAX_CONCURRENT_REQUESTS": "10",  // Max parallel requests
-    "REQUEST_TIMEOUT_SECS": "60"       // Timeout per request
+    "MAX_CONCURRENT_REQUESTS": "10", // Max parallel requests
+    "REQUEST_TIMEOUT_SECS": "60" // Timeout per request
   }
 }
 ```
@@ -140,33 +148,35 @@ You can tune the concurrent request handling:
 
 ### Latency Improvements
 
-| Scenario | Before | After | Improvement |
-|----------|--------|-------|-------------|
-| Single request | ~100ms | ~100ms | No change |
-| 5 concurrent requests | ~500ms | ~100ms | **5x faster** |
-| 10 concurrent requests | ~1000ms | ~100ms | **10x faster** |
-| Auto-approve 50 tools | ❌ Fails | ~1-2s | **Now works!** |
+| Scenario               | Before   | After  | Improvement    |
+| ---------------------- | -------- | ------ | -------------- |
+| Single request         | ~100ms   | ~100ms | No change      |
+| 5 concurrent requests  | ~500ms   | ~100ms | **5x faster**  |
+| 10 concurrent requests | ~1000ms  | ~100ms | **10x faster** |
+| Auto-approve 50 tools  | ❌ Fails | ~1-2s  | **Now works!** |
 
 ### Resource Usage
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Memory overhead | Minimal | +100KB per request |
-| CPU usage | Sequential | Parallel (better utilization) |
-| Max concurrent | 1 | 10 (configurable) |
-| Connection stability | Fragile | Robust |
+| Metric               | Before     | After                         |
+| -------------------- | ---------- | ----------------------------- |
+| Memory overhead      | Minimal    | +100KB per request            |
+| CPU usage            | Sequential | Parallel (better utilization) |
+| Max concurrent       | 1          | 10 (configurable)             |
+| Connection stability | Fragile    | Robust                        |
 
 ---
 
 ## Testing the Fix
 
 ### Test 1: Single Request
+
 ```bash
 # Should work exactly as before
 system.status
 ```
 
 ### Test 2: Rapid Requests
+
 ```bash
 # Send multiple requests quickly
 memory.add "test1"
@@ -178,12 +188,14 @@ system.status
 **Expected:** All requests complete successfully.
 
 ### Test 3: Auto-Approve in Kilo Code
+
 1. Open Kilo Code MCP Servers settings
 2. Select multiple tools (5-10)
 3. Click "Auto-Allow" for each one rapidly
 4. **Expected:** Server stays connected, no errors
 
 ### Test 4: Stress Test
+
 ```powershell
 # Create a test script
 1..20 | ForEach-Object {
@@ -204,6 +216,7 @@ Get-Job | Receive-Job
 ### If you still see connection issues:
 
 #### 1. Check concurrent request count in logs
+
 ```
 [INFO] Received request: method=tools/call, id=1
 [INFO] Received request: method=tools/call, id=2
@@ -216,6 +229,7 @@ Get-Job | Receive-Job
 If you see many requests arriving but few responses, there might be a bottleneck.
 
 #### 2. Look for timeout errors
+
 ```
 [ERROR] Request timeout: method=tools/call, id=5
 ```
@@ -223,6 +237,7 @@ If you see many requests arriving but few responses, there might be a bottleneck
 If you see many timeouts, the HTTP proxy might be slow. Check HTTP_BIND is accessible.
 
 #### 3. Check for rate limiting
+
 ```
 [ERROR] Too many concurrent requests, rejecting: method=tools/call
 ```
@@ -230,6 +245,7 @@ If you see many timeouts, the HTTP proxy might be slow. Check HTTP_BIND is acces
 If you see this, you're hitting the 10 concurrent request limit. This is normal protection.
 
 #### 4. Monitor HTTP server
+
 ```bash
 curl http://127.0.0.1:8080/status
 ```
@@ -245,11 +261,13 @@ Ensure HTTP server is responsive. If it's slow, that affects all stdio requests.
 **No configuration changes needed!** The fix is backward compatible.
 
 1. **Stop the old server:**
+
    ```powershell
    taskkill /F /IM memory_mcp_server.exe
    ```
 
 2. **Rebuild:**
+
    ```bash
    cargo build --release
    ```
@@ -320,18 +338,21 @@ Ensure HTTP server is responsive. If it's slow, that affects all stdio requests.
 ## Code Changes Summary
 
 ### Files Modified
+
 - `server/src/main.rs`:
   - `run_stdio()` - Now spawns concurrent tasks
   - `process_request()` - New function for request handling
   - `write_response()` - New function with protected stdout writes
 
 ### Lines of Code
+
 - **Added:** ~120 lines
 - **Modified:** ~60 lines
 - **Deleted:** ~40 lines
 - **Net change:** +80 lines
 
 ### Complexity
+
 - **Before:** O(n) sequential processing
 - **After:** O(1) with limit of 10 concurrent
 
@@ -340,6 +361,7 @@ Ensure HTTP server is responsive. If it's slow, that affects all stdio requests.
 ## Future Improvements
 
 ### Potential Enhancements
+
 1. **Configurable limits** - Make MAX_CONCURRENT_REQUESTS an env var
 2. **Request prioritization** - Process `initialize` before `tools/call`
 3. **Adaptive timeouts** - Shorter timeouts for fast operations
@@ -347,6 +369,7 @@ Ensure HTTP server is responsive. If it's slow, that affects all stdio requests.
 5. **Metrics collection** - Track concurrent request counts
 
 ### Performance Optimizations
+
 1. **Connection pooling** - Reuse HTTP connections for proxy
 2. **Response caching** - Cache frequent tool calls
 3. **Batch processing** - Handle multiple tool approvals in one request
@@ -366,6 +389,7 @@ Ensure HTTP server is responsive. If it's slow, that affects all stdio requests.
 If concurrent request handling still has issues:
 
 1. **Enable debug logging:**
+
    ```json
    "env": { "RUST_LOG": "debug" }
    ```
@@ -391,4 +415,3 @@ If concurrent request handling still has issues:
 **Version:** 0.1.0 (with concurrent request handling)  
 **Compatibility:** Backward compatible, no config changes needed  
 **Performance:** 5-10x faster for concurrent requests
-

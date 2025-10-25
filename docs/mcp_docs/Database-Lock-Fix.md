@@ -5,7 +5,7 @@
 Thanks to your logs, I found the **real issue**:
 
 ```
-Error: IO error: could not acquire lock on "c:/Users/charl/Desktop/MyProjects/CodeXBattle/.kilo/memory\\warm\\kv\\db": 
+Error: IO error: could not acquire lock on "c:/Users/charl/Desktop/MyProjects/CodeXBattle/.kilo/memory\\warm\\kv\\db":
 Os { code: 33, kind: Uncategorized, message: "The process cannot access the file because another process has locked a portion of the file." }
 ```
 
@@ -76,6 +76,7 @@ sleep(Duration::from_millis(100)).await;
 ### **In Logs (with `RUST_LOG=info`):**
 
 **When auto-allow causes restart and database is locked:**
+
 ```
 [INFO] Database locked, retrying in 100ms (attempt 1/10)
 [INFO] Database locked, retrying in 200ms (attempt 2/10)
@@ -84,6 +85,7 @@ sleep(Duration::from_millis(100)).await;
 ```
 
 **Clean shutdown (Ctrl+C):**
+
 ```
 [INFO] Shutdown signal received
 [INFO] Flushing database...
@@ -117,17 +119,18 @@ The server has been rebuilt. Now:
 
 ### **Retry Parameters:**
 
-| Attempt | Wait Time | Total Time |
-|---------|-----------|------------|
-| 1 | 100ms | 100ms |
-| 2 | 200ms | 300ms |
-| 3 | 300ms | 600ms |
-| 4 | 400ms | 1000ms (1s) |
-| 5 | 500ms | 1500ms |
-| ... | ... | ... |
-| 10 | 1000ms | ~5500ms (5.5s) |
+| Attempt | Wait Time | Total Time     |
+| ------- | --------- | -------------- |
+| 1       | 100ms     | 100ms          |
+| 2       | 200ms     | 300ms          |
+| 3       | 300ms     | 600ms          |
+| 4       | 400ms     | 1000ms (1s)    |
+| 5       | 500ms     | 1500ms         |
+| ...     | ...       | ...            |
+| 10      | 1000ms    | ~5500ms (5.5s) |
 
 **Why these numbers:**
+
 - Windows typically releases locks within 100-500ms
 - 10 attempts = ~5.5 seconds max wait (more than enough)
 - Exponential backoff prevents hammering the filesystem
@@ -149,12 +152,15 @@ sled::Config::new()
 ### **If you still see lock errors:**
 
 1. **Check for zombie processes:**
+
    ```powershell
    Get-Process memory_mcp_server
    ```
+
    Should show only ONE process when connected.
 
 2. **Kill all instances and wait:**
+
    ```powershell
    taskkill /F /IM memory_mcp_server.exe
    Start-Sleep -Seconds 3  # Wait for locks to release
@@ -163,10 +169,11 @@ sled::Config::new()
 
 3. **Check logs for retry attempts:**
    With `RUST_LOG=info`, you should see:
+
    ```
    [INFO] Database locked, retrying in 100ms (attempt 1/10)
    ```
-   
+
    If you see this go to 10/10 and still fail, there's a deeper issue.
 
 4. **Nuclear option - clear the database:**
@@ -191,6 +198,7 @@ sled::Config::new()
 ### **Why This Fix Works:**
 
 ✅ **Directly addresses the lock acquisition race condition**
+
 - Waits for lock instead of crashing
 - Gives Windows time to release the lock
 - Exponential backoff prevents resource waste
@@ -211,12 +219,12 @@ After applying this fix:
 
 ## 📈 **Performance Impact**
 
-| Scenario | Before | After |
-|----------|--------|-------|
-| Normal startup | Instant | Instant (no change) |
+| Scenario            | Before   | After                       |
+| ------------------- | -------- | --------------------------- |
+| Normal startup      | Instant  | Instant (no change)         |
 | Startup after crash | ❌ Fails | ✅ Succeeds after 100-500ms |
-| Rapid restart | ❌ Fails | ✅ Succeeds with retry |
-| Clean shutdown | N/A | Proper lock release |
+| Rapid restart       | ❌ Fails | ✅ Succeeds with retry      |
+| Clean shutdown      | N/A      | Proper lock release         |
 
 **Overhead:** Only when database is locked (rare in normal operation)
 
@@ -225,12 +233,14 @@ After applying this fix:
 ## 🔗 **Related Issues**
 
 This fix resolves:
+
 - ❌ "Connection closed" on auto-allow
 - ❌ "could not acquire lock" errors
 - ❌ Server crash loops on restart
 - ❌ "No tools available" after reconnect
 
 This does NOT fix (different issues):
+
 - HTTP server connection issues (see Concurrent-Request-Fix.md)
 - Initial connection problems (see VS-Code-Kilo-Fix.md)
 - Tool execution errors (application-level issues)
@@ -247,6 +257,7 @@ If database lock issues persist:
 4. **Note if retries reach 10/10** (indicates persistent lock)
 
 With `RUST_LOG=debug`, you'll see:
+
 ```
 [DEBUG] Attempting to open database at: c:/Users/.../memory/warm/kv
 [INFO] Database locked, retrying in 100ms (attempt 1/10)
@@ -259,4 +270,3 @@ With `RUST_LOG=debug`, you'll see:
 **Root Cause:** Windows file lock race condition  
 **Solution:** Retry logic with exponential backoff  
 **Impact:** Handles rapid restarts gracefully
-

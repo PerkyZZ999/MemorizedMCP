@@ -40,9 +40,9 @@
 - Trigger: Scheduled background job or manual `advanced.consolidate`
 - Criteria: Importance score, access frequency, recency, confidence
 - Steps:
-  1) Mark promotion candidates; create/merge LTM entries
-  2) Update KG links; reweight relationships
-  3) Re‑embed if content changed; update indices
+  1. Mark promotion candidates; create/merge LTM entries
+  2. Update KG links; reweight relationships
+  3. Re‑embed if content changed; update indices
 
 ### Decay & Strengthening
 

@@ -3,6 +3,7 @@
 Source: `docs/Requirements.md`
 
 ### Scope
+
 This document lists requirements that are not met or only partially met by the current implementation.
 
 ---
@@ -90,5 +91,3 @@ This document lists requirements that are not met or only partially met by the c
 - No versioning/re‑embedding/index refresh on `memory.update`; no safe cascade on delete.
 - Document retrieval by `path` not supported; analyze lacks concepts/summary/linking output.
 - No metrics/dashboards; no backpressure/circuit breakers; minimal input validation.
-
-

@@ -44,24 +44,24 @@
 ### Data Flows
 
 - Add Memory
-  1) Analyze/classify (STM vs LTM), extract entities/relationships
-  2) Generate embeddings; write to vector index (HNSW)
-  3) Upsert KG nodes/edges with temporal properties
-  4) Index text in Tantivy; link documentary references
+  1. Analyze/classify (STM vs LTM), extract entities/relationships
+  2. Generate embeddings; write to vector index (HNSW)
+  3. Upsert KG nodes/edges with temporal properties
+  4. Index text in Tantivy; link documentary references
 
 - Search Memory
-  1) Run vector, graph, and text queries in parallel
-  2) Apply temporal filters and layer‑aware constraints
-  3) Fuse results; score and rank; return enriched context
+  1. Run vector, graph, and text queries in parallel
+  2. Apply temporal filters and layer‑aware constraints
+  3. Fuse results; score and rank; return enriched context
 
 - Update/Delete Memory
   - Update: re‑embed as needed; update indices and graph consistency
   - Delete: dependency check; cascade cleanup; create backups
 
 - Document Ingestion
-  1) Parse PDF/Markdown → extract structured text and metadata
-  2) Chunk + embed; store chunks with positions and references
-  3) Index chunks in vector and full‑text; link entities to KG
+  1. Parse PDF/Markdown → extract structured text and metadata
+  2. Chunk + embed; store chunks with positions and references
+  3. Index chunks in vector and full‑text; link entities to KG
 
 ### Cross-Cutting Concerns
 

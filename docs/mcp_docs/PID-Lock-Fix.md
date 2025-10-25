@@ -9,10 +9,11 @@
 When Kilo Code restarts the MemorizedMCP server (e.g., when modifying `alwaysAllow` settings in `mcp.json`), the old server process remains running and holds a lock on the Sled database. The new server instance cannot acquire the lock, leading to connection failures.
 
 ### Error Signature
+
 ```
-ERROR Failed to open database after 10 attempts: IO error: could not acquire lock on 
-"c:/Users/charl/Desktop/MyProjects/CodeXBattle/.kilo/memory\\warm\\kv\\db": 
-Os { code: 33, kind: Uncategorized, message: "The process cannot access the file 
+ERROR Failed to open database after 10 attempts: IO error: could not acquire lock on
+"c:/Users/charl/Desktop/MyProjects/CodeXBattle/.kilo/memory\\warm\\kv\\db":
+Os { code: 33, kind: Uncategorized, message: "The process cannot access the file
 because another process has locked a portion of the file." }
 ```
 
@@ -21,7 +22,7 @@ because another process has locked a portion of the file." }
 1. **Sled Database Design**: Sled is a single-process embedded database that uses file-based locking to prevent concurrent access
 2. **Restart Behavior**: When Kilo Code updates `mcp.json` (e.g., adding tools to `alwaysAllow`), it restarts the server by:
    - Spawning a new server process
-   - *Attempting* to close the old one
+   - _Attempting_ to close the old one
    - However, the old process may not die immediately or may become zombie
 3. **Race Condition**: The new process starts before the old one fully releases database locks
 4. **Silent Failures**: With `RUST_LOG: "off"`, these errors were hidden from logs
@@ -29,6 +30,7 @@ because another process has locked a portion of the file." }
 ## Solution: PID-Based Stale Instance Detection
 
 We implemented a **process ID (PID) file mechanism** that:
+
 1. Writes the server's PID to `<DATA_DIR>/warm/server.pid` on startup
 2. On startup, checks if a PID file exists
 3. If found, verifies if that process is still running:
@@ -44,20 +46,21 @@ We implemented a **process ID (PID) file mechanism** that:
 **File:** `server/src/main.rs`
 
 **New Function:**
+
 ```rust
 fn handle_stale_instance(pid_file: &std::path::Path) -> Result<()> {
     // Check if PID file exists
     if let Ok(pid_str) = fs::read_to_string(pid_file) {
         if let Ok(old_pid) = pid_str.trim().parse::<u32>() {
             info!("Found existing PID file with PID: {}", old_pid);
-            
+
             #[cfg(target_os = "windows")]
             {
                 // Check if process is still running
                 let output = Command::new("tasklist")
                     .args(&["/FI", &format!("PID eq {}", old_pid), "/NH"])
                     .output();
-                
+
                 if let Ok(output) = output {
                     let output_str = String::from_utf8_lossy(&output.stdout);
                     if output_str.contains(&old_pid.to_string()) {
@@ -73,11 +76,11 @@ fn handle_stale_instance(pid_file: &std::path::Path) -> Result<()> {
                     }
                 }
             }
-            
+
             // Remove stale PID file
             let _ = fs::remove_file(pid_file);
             info!("Removed stale PID file");
-            
+
             // Give OS time to fully release file locks
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
@@ -87,6 +90,7 @@ fn handle_stale_instance(pid_file: &std::path::Path) -> Result<()> {
 ```
 
 **Startup Logic:**
+
 ```rust
 let pid_file = dirs.warm.join("server.pid");
 
@@ -113,6 +117,7 @@ let db = match db_config.open() {
 ```
 
 **Shutdown Logic:**
+
 ```rust
 // Remove PID file
 let pid_file = std::path::PathBuf::from(&data_dir).join("warm").join("server.pid");
@@ -126,6 +131,7 @@ if let Err(e) = std::fs::remove_file(&pid_file) {
 ## How It Works
 
 ### Startup Sequence
+
 1. **PID File Check**
    ```
    [Startup] Checking for PID file at C:\...\warm\server.pid
@@ -150,6 +156,7 @@ if let Err(e) = std::fs::remove_file(&pid_file) {
    ```
 
 ### Shutdown Sequence
+
 1. **Database Close**
    ```
    [INFO] Closing database...
@@ -167,18 +174,22 @@ if let Err(e) = std::fs::remove_file(&pid_file) {
 ## Testing the Fix
 
 ### Test 1: Normal Startup
+
 ```powershell
 # Start fresh
 cd C:\Users\charl\Desktop\MyProjects\MemorizedMCP
 .\target\release\memory_mcp_server.exe --data-dir "C:\test\memory"
 ```
+
 **Expected Result:**
+
 ```
 [INFO] Server PID 12345 written to "C:\test\memory\warm\server.pid"
 [INFO] Database opened successfully
 ```
 
 ### Test 2: Restart with Old Instance Running
+
 ```powershell
 # Start first instance
 .\target\release\memory_mcp_server.exe --data-dir "C:\test\memory"
@@ -186,7 +197,9 @@ cd C:\Users\charl\Desktop\MyProjects\MemorizedMCP
 # While first is running, start second instance
 .\target\release\memory_mcp_server.exe --data-dir "C:\test\memory"
 ```
+
 **Expected Result:**
+
 ```
 [INFO] Found existing PID file with PID: 12345
 [INFO] Process 12345 is still running, attempting to kill it
@@ -196,6 +209,7 @@ cd C:\Users\charl\Desktop\MyProjects\MemorizedMCP
 ```
 
 ### Test 3: Stale PID File (Process Crashed)
+
 ```powershell
 # 1. Start server
 .\target\release\memory_mcp_server.exe
@@ -208,7 +222,9 @@ taskkill /F /IM memory_mcp_server.exe
 # 4. Start again
 .\target\release\memory_mcp_server.exe
 ```
+
 **Expected Result:**
+
 ```
 [INFO] Found existing PID file with PID: 12345
 [INFO] Process 12345 is not running (stale PID file)
@@ -218,6 +234,7 @@ taskkill /F /IM memory_mcp_server.exe
 ```
 
 ### Test 4: Auto-Allow in Kilo Code
+
 1. Open Kilo Code
 2. Go to MCP Tools UI
 3. Check "Auto-Allow" for a tool (e.g., `memory.add`)
@@ -228,6 +245,7 @@ taskkill /F /IM memory_mcp_server.exe
 ### CRITICAL: Keep Logging Enabled
 
 In your `mcp.json` or `mcp_settings.json`, ensure:
+
 ```json
 {
   "mcpServers": {
@@ -236,7 +254,7 @@ In your `mcp.json` or `mcp_settings.json`, ensure:
       "args": [],
       "env": {
         "DATA_DIR": "${workspaceFolder}/.kilo/memory",
-        "RUST_LOG": "info"  // ⚠️ KEEP THIS AS "info" - DO NOT SET TO "off"
+        "RUST_LOG": "info" // ⚠️ KEEP THIS AS "info" - DO NOT SET TO "off"
       }
     }
   }
@@ -244,6 +262,7 @@ In your `mcp.json` or `mcp_settings.json`, ensure:
 ```
 
 **Why `RUST_LOG: "info"` is Critical:**
+
 - Without it, database lock errors are silently swallowed
 - You won't see PID file operations in logs
 - Debugging becomes impossible
@@ -253,15 +272,16 @@ In your `mcp.json` or `mcp_settings.json`, ensure:
 
 ### ✅ Before vs After
 
-| Scenario | Before | After |
-|----------|--------|-------|
-| **Normal Start** | ✅ Works | ✅ Works |
-| **Restart** | ❌ Database locked | ✅ Old process killed, restarts cleanly |
-| **Crash Recovery** | ❌ Manual cleanup required | ✅ Stale locks auto-removed |
-| **Auto-Allow in Kilo** | ❌ Connection closed | ✅ Seamless restart |
-| **Multiple Workspaces** | ⚠️ Conflicts possible | ✅ Each workspace isolated |
+| Scenario                | Before                     | After                                   |
+| ----------------------- | -------------------------- | --------------------------------------- |
+| **Normal Start**        | ✅ Works                   | ✅ Works                                |
+| **Restart**             | ❌ Database locked         | ✅ Old process killed, restarts cleanly |
+| **Crash Recovery**      | ❌ Manual cleanup required | ✅ Stale locks auto-removed             |
+| **Auto-Allow in Kilo**  | ❌ Connection closed       | ✅ Seamless restart                     |
+| **Multiple Workspaces** | ⚠️ Conflicts possible      | ✅ Each workspace isolated              |
 
 ### Robustness Improvements
+
 1. **Automatic Recovery**: No manual intervention needed for stale locks
 2. **Fast Restarts**: 500ms wait is much faster than manual cleanup
 3. **Cross-Platform**: Works on Windows, Linux, and macOS
@@ -271,15 +291,19 @@ In your `mcp.json` or `mcp_settings.json`, ensure:
 ## Troubleshooting
 
 ### Issue: "Permission denied" when killing process
+
 **Cause:** The old process is owned by a different user or running with elevated privileges  
 **Solution:** Run Kilo Code with the same user that started the original server
 
 ### Issue: PID file not removed on shutdown
+
 **Cause:** Server crashed or was force-killed before cleanup  
 **Solution:** This is expected! The fix handles this by cleaning up stale PID files on next startup
 
 ### Issue: Still getting "database locked" after fix
+
 **Diagnosis Checklist:**
+
 1. ✅ Is `RUST_LOG: "info"` set in your MCP config?
 2. ✅ Did you rebuild the server? (`cargo build --release`)
 3. ✅ Is Kilo Code using the NEW binary? (Check executable path and timestamp)
@@ -287,6 +311,7 @@ In your `mcp.json` or `mcp_settings.json`, ensure:
 5. ✅ Is the PID file being created? (Check `<DATA_DIR>/warm/server.pid`)
 
 **Debug Commands:**
+
 ```powershell
 # Check for running servers
 Get-Process memory_mcp_server | Format-Table Id, StartTime, Path
@@ -302,17 +327,14 @@ Get-ChildItem "C:\Users\charl\Desktop\MyProjects\CodeXBattle\.kilo\memory\warm\k
 
 ### Alternative Approaches Considered
 
-1. **Shared Database Access** 
+1. **Shared Database Access**
    - ❌ Sled doesn't support this by design (single-process)
-   
 2. **Different Database (SQLite, RocksDB)**
    - ⚠️ Major refactor, breaks existing data
    - Could be future enhancement
-   
 3. **File-Based Lock with Timeout**
    - ⚠️ Still requires PID checking for zombie detection
    - More complex, same outcome
-   
 4. **Client-Side Reconnection**
    - ❌ Doesn't solve the root cause (database lock)
    - Kilo Code already attempts reconnection
@@ -339,6 +361,7 @@ Get-ChildItem "C:\Users\charl\Desktop\MyProjects\CodeXBattle\.kilo\memory\warm\k
 The PID-based stale instance fix is a **definitive solution** to the database locking problem that plagued MemorizedMCP restarts in Kilo Code. By detecting and terminating stale server processes before acquiring database locks, we've eliminated the need for manual intervention and enabled seamless auto-allow workflows.
 
 **Key Takeaways:**
+
 - ✅ Auto-allow tools work without "Connection closed" errors
 - ✅ Server restarts are fast (<1 second) and automatic
 - ✅ No manual process killing required
@@ -346,9 +369,9 @@ The PID-based stale instance fix is a **definitive solution** to the database lo
 - ⚠️ **Must keep `RUST_LOG: "info"` enabled for visibility**
 
 **Success Criteria:** ✅ ACHIEVED
+
 - [x] Can add tools to `alwaysAllow` without errors
 - [x] Server restarts cleanly when config changes
 - [x] Stale processes are automatically cleaned up
 - [x] Database locks are released properly
 - [x] No manual intervention required
-

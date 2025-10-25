@@ -15,13 +15,17 @@ Fixed critical issue where the MCP server would close connections when Kilo Code
 ## 🐛 Problem Analysis
 
 ### Original Issue
+
 After the initial connection fix, the server worked fine for **single requests** but would fail when:
+
 - Using Kilo Code's "auto-approve all" feature
 - Sending multiple tool approval requests rapidly
 - Any concurrent or rapid-fire requests
 
 ### Root Cause
+
 The stdio handler processed requests **sequentially**:
+
 ```rust
 // Old approach - BLOCKING
 while let Some(request) = read_request() {
@@ -31,6 +35,7 @@ while let Some(request) = read_request() {
 ```
 
 **Problems:**
+
 1. **Slow requests blocked fast ones** - One slow HTTP call blocked all subsequent requests
 2. **No timeout protection** - A hung request would hang everything
 3. **Fragile connection** - Any processing error would kill the connection
@@ -43,6 +48,7 @@ while let Some(request) = read_request() {
 ### 1. **Concurrent Task Spawning**
 
 **Before:**
+
 ```rust
 for request in requests {
     process_and_respond(request).await;  // Sequential
@@ -50,6 +56,7 @@ for request in requests {
 ```
 
 **After:**
+
 ```rust
 for request in requests {
     tokio::spawn(async move {  // Concurrent!
@@ -129,43 +136,49 @@ match parse_request(line) {
 
 ### Latency Comparison
 
-| Scenario | Before (Sequential) | After (Concurrent) | Improvement |
-|----------|---------------------|-------------------|-------------|
-| 1 request | 100ms | 100ms | Same |
-| 5 rapid requests | 500ms | 100ms | **5x faster** |
-| 10 rapid requests | 1000ms | 100ms | **10x faster** |
-| **Auto-approve 50 tools** | ❌ **Fails** | ✅ **1-2s** | **Now works!** |
+| Scenario                  | Before (Sequential) | After (Concurrent) | Improvement    |
+| ------------------------- | ------------------- | ------------------ | -------------- |
+| 1 request                 | 100ms               | 100ms              | Same           |
+| 5 rapid requests          | 500ms               | 100ms              | **5x faster**  |
+| 10 rapid requests         | 1000ms              | 100ms              | **10x faster** |
+| **Auto-approve 50 tools** | ❌ **Fails**        | ✅ **1-2s**        | **Now works!** |
 
 ### Resource Usage
 
-| Metric | Before | After | Change |
-|--------|--------|-------|--------|
-| Memory per request | ~10KB | ~110KB | +100KB overhead |
-| CPU utilization | Poor (sequential) | Excellent (parallel) | Better |
-| Max throughput | ~10 req/s | ~100 req/s | **10x higher** |
-| Connection stability | Fragile | Robust | **Much better** |
+| Metric               | Before            | After                | Change          |
+| -------------------- | ----------------- | -------------------- | --------------- |
+| Memory per request   | ~10KB             | ~110KB               | +100KB overhead |
+| CPU utilization      | Poor (sequential) | Excellent (parallel) | Better          |
+| Max throughput       | ~10 req/s         | ~100 req/s           | **10x higher**  |
+| Connection stability | Fragile           | Robust               | **Much better** |
 
 ---
 
 ## 🧪 Testing Results
 
 ### Test 1: Single Request
+
 ```bash
 system.status
 ```
+
 ✅ **Result:** Works perfectly, same as before
 
 ### Test 2: Rapid Sequential Requests
+
 ```bash
 memory.add "test1"
-memory.add "test2"  
+memory.add "test2"
 memory.add "test3"
 system.status
 ```
+
 ✅ **Result:** All requests complete, 3-4x faster than before
 
 ### Test 3: Auto-Approve in Kilo Code
+
 **Steps:**
+
 1. Open Kilo Code MCP Servers settings
 2. Select 10-20 tools
 3. Click auto-approve for each rapidly
@@ -173,11 +186,13 @@ system.status
 ✅ **Result:** Server stays connected, all approvals work
 
 ### Test 4: Stress Test
+
 ```powershell
 1..100 | ForEach-Object {
     Start-Job { Invoke-RestMethod http://127.0.0.1:8080/status }
 }
 ```
+
 ✅ **Result:** All 100 requests complete successfully
 
 ---
@@ -187,29 +202,32 @@ system.status
 ### New Functions
 
 #### `run_stdio()` - Refactored
+
 - Now spawns concurrent tasks instead of blocking
 - Tracks active request count
 - Implements rate limiting
 
 #### `process_request()` - New
+
 - Extracted request processing logic
 - Clean separation of concerns
 - Easy to test and debug
 
 #### `write_response()` - New
+
 - Protected stdout writes with mutex
 - Prevents response corruption
 - Proper error handling
 
 ### Modified Behavior
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Request processing | Sequential | Concurrent (max 10) |
-| Error handling | Fatal (breaks loop) | Graceful (continues) |
-| Timeouts | None | 60s per request |
-| Stdout writes | Unprotected | Mutex-protected |
-| Logging | Basic | Comprehensive |
+| Aspect             | Before              | After                |
+| ------------------ | ------------------- | -------------------- |
+| Request processing | Sequential          | Concurrent (max 10)  |
+| Error handling     | Fatal (breaks loop) | Graceful (continues) |
+| Timeouts           | None                | 60s per request      |
+| Stdout writes      | Unprotected         | Mutex-protected      |
+| Logging            | Basic               | Comprehensive        |
 
 ---
 
@@ -246,11 +264,13 @@ system.status
 **No configuration changes needed!** Just rebuild and restart.
 
 1. **Stop any running servers:**
+
    ```powershell
    taskkill /F /IM memory_mcp_server.exe
    ```
 
 2. **Rebuild:**
+
    ```bash
    cargo build --release
    ```
@@ -266,12 +286,14 @@ system.status
 ## 🐛 Known Limitations
 
 ### Current Constraints
+
 1. **Max 10 concurrent requests** - Hardcoded, not yet configurable
 2. **60-second timeout** - Fixed, may be too long for some operations
 3. **No request prioritization** - All requests treated equally
 4. **Memory overhead** - +100KB per concurrent request
 
 ### Future Enhancements
+
 1. Make MAX_CONCURRENT_REQUESTS configurable via env var
 2. Implement request prioritization (`initialize` > `tools/list` > `tools/call`)
 3. Adaptive timeouts based on operation type
@@ -285,6 +307,7 @@ system.status
 ### Still seeing connection issues?
 
 #### Check 1: Verify concurrent processing in logs
+
 ```
 [INFO] Received request: method=tools/call, id=1
 [INFO] Received request: method=tools/call, id=2  ← Should not wait!
@@ -293,6 +316,7 @@ system.status
 If requests are still sequential, the fix didn't apply.
 
 #### Check 2: Look for rate limiting
+
 ```
 [ERROR] Too many concurrent requests, rejecting
 ```
@@ -300,6 +324,7 @@ If requests are still sequential, the fix didn't apply.
 If you see this frequently, you're hitting the 10-request limit (this is normal).
 
 #### Check 3: Monitor HTTP server
+
 ```bash
 curl http://127.0.0.1:8080/status
 ```
@@ -307,6 +332,7 @@ curl http://127.0.0.1:8080/status
 If HTTP is slow, concurrent requests will all be slow.
 
 #### Check 4: Enable debug logging
+
 ```json
 "env": { "RUST_LOG": "debug" }
 ```
@@ -379,7 +405,7 @@ Look for spawned task logs and response timing.
 ✅ Auto-approve 50+ tools without connection loss  
 ✅ Individual timeouts don't affect other requests  
 ✅ Stdout responses never corrupt each other  
-✅ Graceful handling of parse/processing errors  
+✅ Graceful handling of parse/processing errors
 
 ---
 
@@ -388,4 +414,3 @@ Look for spawned task logs and response timing.
 **Effort:** Medium (refactoring + testing)  
 **Risk:** Low (backward compatible, well-tested)  
 **Performance:** 5-10x improvement for concurrent requests
-

@@ -8,13 +8,13 @@
 
 ### Project Setup
 
-1) Clone repo and open in Cursor
-2) Configure `.env` or environment variables:
+1. Clone repo and open in Cursor
+2. Configure `.env` or environment variables:
    - DATA_DIR=./data
    - HOT_CACHE_MB=512
    - VECTOR_HNSW_PARAMS={"M":24,"efConstruction":200,"efSearch":128}
    - LOG_LEVEL=info
-3) Build and run server
+3. Build and run server
    - `cargo build`
    - `cargo run` (stdio by default); `--http` to enable HTTP endpoint
    - Recommended dev tools: Rust Analyzer, Cargo Watch (`cargo install cargo-watch`)
@@ -49,7 +49,7 @@
 - `DATA_DIR/warm` — sled KV stores for nodes, edges, docs, chunks, memories
 - `DATA_DIR/cold` — compressed large blobs (lz4_flex)
 - `DATA_DIR/index` — HNSW files and Tantivy directories
- - `DATA_DIR/settings` — persisted system settings (sled tree)
+- `DATA_DIR/settings` — persisted system settings (sled tree)
 
 ### Configuration Reference
 
@@ -68,13 +68,13 @@
 ### Example Flows
 
 - Ingest a document (Markdown)
-  1) `document.store` with content
-  2) `document.analyze` to extract concepts/entities
-  3) `memory.add` referencing the document chunk(s)
+  1. `document.store` with content
+  2. `document.analyze` to extract concepts/entities
+  3. `memory.add` referencing the document chunk(s)
 
 - Run a hybrid search
-  1) `memory.search` with `filters.timeFrom/timeTo`
-  2) Review docRefs and open supporting documents
+  1. `memory.search` with `filters.timeFrom/timeTo`
+  2. Review docRefs and open supporting documents
 
 ### CI/CD Notes
 

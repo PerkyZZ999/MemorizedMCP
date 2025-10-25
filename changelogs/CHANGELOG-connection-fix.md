@@ -15,17 +15,19 @@ Fixed critical connection issues preventing MemorizedMCP from working with VS Co
 ### 1. **Enhanced STDIO Handler** (`server/src/main.rs` lines 1118-1225)
 
 **Before:**
+
 ```rust
 // Used println! without flush
 println!("{}", serde_json::to_string(&out).unwrap());
 // Silent error handling
-let v: serde_json::Value = match serde_json::from_str(line) { 
-    Ok(x) => x, 
+let v: serde_json::Value = match serde_json::from_str(line) {
+    Ok(x) => x,
     Err(_) => continue  // Silent!
 };
 ```
 
 **After:**
+
 ```rust
 // Explicit async stdout with flushing
 let mut stdout = stdout();
@@ -50,6 +52,7 @@ let v: serde_json::Value = match serde_json::from_str(line) {
 ### 2. **HTTP Proxy Retry Logic** (`server/src/main.rs` lines 447-503)
 
 **Before:**
+
 ```rust
 // Single attempt, no timeout
 let client = reqwest::Client::new();
@@ -57,6 +60,7 @@ let resp_result = client.get(&url).send().await;
 ```
 
 **After:**
+
 ```rust
 // Timeout + 3 retries with exponential backoff
 let client = reqwest::Client::builder()
@@ -78,6 +82,7 @@ for attempt in 0..max_retries {
 ### 3. **Startup Coordination** (`server/src/main.rs` line 272)
 
 **Before:**
+
 ```rust
 // HTTP and stdio started simultaneously
 let http_task = task::spawn(async move { /* start HTTP */ });
@@ -86,6 +91,7 @@ let stdio_task = task::spawn(async move { run_stdio(state).await; });
 ```
 
 **After:**
+
 ```rust
 let http_task = task::spawn(async move { /* start HTTP */ });
 tasks.push(http_task);
@@ -103,6 +109,7 @@ let stdio_task = task::spawn(async move { run_stdio(state).await; });
 ### 4. **Comprehensive Logging**
 
 Added logging at key points:
+
 - ✅ `info!("STDIO MCP handler started")`
 - ✅ `info!("Received request: method={}, id={}", method, id_val)`
 - ✅ `info!("Response sent for method={}", method)`
@@ -144,13 +151,16 @@ Added logging at key points:
 ## 🧪 Testing
 
 ### Automated Tests
+
 All existing tests pass:
+
 ```bash
 cargo test
 # ... all tests passed
 ```
 
 ### Manual Testing Checklist
+
 - [x] Build succeeds: `cargo build --release`
 - [x] Server starts: Logs show "STDIO MCP handler started"
 - [x] Initialize handshake: Returns correct protocol version
@@ -168,16 +178,19 @@ cargo test
 ### For End Users
 
 1. **Stop running server:**
+
    ```bash
    taskkill /F /IM memory_mcp_server.exe
    ```
 
 2. **Rebuild:**
+
    ```bash
    cargo build --release
    ```
 
 3. **Update MCP config** (VS Code settings.json or Kilo config):
+
    ```json
    {
      "mcpServers": {
@@ -198,7 +211,7 @@ cargo test
 5. **Test:**
    ```javascript
    // Should work now!
-   system.status
+   system.status;
    ```
 
 ---
@@ -206,6 +219,7 @@ cargo test
 ## 📚 Documentation Updates
 
 New/updated files:
+
 - ✅ `docs/mcp_docs/VS-Code-Kilo-Fix.md` - Comprehensive troubleshooting guide
 - ✅ `docs/mcp_docs/Troubleshooting.md` - Added connection issues section
 - ✅ `CHANGELOG-connection-fix.md` - This file
@@ -217,6 +231,7 @@ New/updated files:
 ### Expected Log Output
 
 With `RUST_LOG=info`, you should see:
+
 ```
 [INFO] STDIO MCP handler started
 [INFO] Starting HTTP server bind=127.0.0.1:8080
@@ -234,7 +249,7 @@ With `RUST_LOG=info`, you should see:
 ✅ Initialize completes successfully  
 ✅ Tool calls return results  
 ✅ Logs show all requests/responses  
-✅ No timeout errors  
+✅ No timeout errors
 
 ---
 
@@ -242,10 +257,8 @@ With `RUST_LOG=info`, you should see:
 
 1. **HTTP dependency:** stdio mode still requires HTTP server to be running
    - Future: Consider direct state access for stdio mode
-   
 2. **Fixed retry count:** 3 attempts hardcoded
    - Future: Make configurable via environment variable
-   
 3. **Small startup delay:** 100ms delay before stdio handler
    - Impact: Minimal, but could be optimized with proper ready signal
 
@@ -275,6 +288,7 @@ With `RUST_LOG=info`, you should see:
 If you still experience issues after applying this fix:
 
 1. **Enable debug logging:**
+
    ```json
    "env": { "RUST_LOG": "debug" }
    ```
@@ -282,6 +296,7 @@ If you still experience issues after applying this fix:
 2. **Check the logs** in VS Code Output panel (select "MCP: memorized-mcp")
 
 3. **Test HTTP directly:**
+
    ```bash
    curl http://127.0.0.1:8080/status
    ```
@@ -298,4 +313,3 @@ If you still experience issues after applying this fix:
 **Priority:** 🔴 Critical (blocks VS Code usage)  
 **Effort:** Low (code changes) + Medium (testing)  
 **Risk:** Low (backward compatible, improves reliability)
-

@@ -35,5 +35,3 @@ Create a dashboard with these panels:
 - Average latency: `mcp_query_avg_ms`
 
 Set alert rules on p95 thresholds aligned with `STATUS_P95_MS_THRESHOLD`.
-
-
